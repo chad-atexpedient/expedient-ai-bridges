@@ -1,4 +1,4 @@
-﻿import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import devCerts from "office-addin-dev-certs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -247,12 +247,14 @@ function byokProxyPlugin(): Plugin {
   };
 }
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ command }) => {
   let httpsOptions = {};
-  try {
-    httpsOptions = await devCerts.getHttpsServerOptions();
-  } catch {
-    httpsOptions = {};
+  if (command === "serve" && !process.env.CI) {
+    try {
+      httpsOptions = await devCerts.getHttpsServerOptions();
+    } catch {
+      httpsOptions = {};
+    }
   }
 
   return {
