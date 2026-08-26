@@ -1,0 +1,154 @@
+{
+  "id": "lookup-repair",
+  "description": "A commission report uses broken lookups: a wrong column index, an unanchored range that drifts, and a VLOOKUP missing its exact-match flag.",
+  "prompt": "The Rate column on the Report sheet is returning wrong or missing commission rates for some reps. Diagnose the lookup formulas and repair them so every row pulls the correct rate. Do not edit the Rates sheet.",
+  "protectedSheets": [
+    "Rates"
+  ],
+  "budget": {
+    "maxToolCalls": 30,
+    "maxMinutes": 12
+  },
+  "seed": {
+    "sheets": [
+      {
+        "name": "Rates",
+        "rows": [
+          [
+            "Rep",
+            "Tier",
+            "Rate"
+          ],
+          [
+            "Avery",
+            "Gold",
+            0.12
+          ],
+          [
+            "Blake",
+            "Silver",
+            0.08
+          ],
+          [
+            "Casey",
+            "Gold",
+            0.12
+          ],
+          [
+            "Devon",
+            "Bronze",
+            0.05
+          ],
+          [
+            "Ellis",
+            "Silver",
+            0.08
+          ]
+        ]
+      },
+      {
+        "name": "Report",
+        "rows": [
+          [
+            "Rep",
+            "Sales",
+            "Rate",
+            "Commission"
+          ],
+          [
+            "Avery",
+            120000,
+            "=VLOOKUP(A2,Rates!$A$2:$C$6,3,FALSE)",
+            "=B2*C2"
+          ],
+          [
+            "Blake",
+            98000,
+            "=VLOOKUP(A3,Rates!$A$2:$C$6,2,FALSE)",
+            "=B3*C3"
+          ],
+          [
+            "Casey",
+            143000,
+            "=VLOOKUP(A4,Rates!A4:C8,3,FALSE)",
+            "=B4*C4"
+          ],
+          [
+            "Devon",
+            76000,
+            "=VLOOKUP(A5,Rates!$A$2:$C$6,3)",
+            "=B5*C5"
+          ],
+          [
+            "Ellis",
+            110000,
+            "=VLOOKUP(A6,Rates!$A$2:$C$6,3,FALSE)",
+            "=B6*C6"
+          ],
+          [
+            "Total",
+            "=SUM(B2:B6)",
+            "",
+            "=SUM(D2:D6)"
+          ]
+        ]
+      }
+    ]
+  },
+  "targetFixes": {
+    "Report!C3": "=VLOOKUP(A3,Rates!$A$2:$C$6,3,FALSE)",
+    "Report!C4": "=VLOOKUP(A4,Rates!$A$2:$C$6,3,FALSE)",
+    "Report!C5": "=VLOOKUP(A5,Rates!$A$2:$C$6,3,FALSE)"
+  },
+  "expectedValues": {},
+  "allowedEdits": [],
+  "variants": [
+    {
+      "id": "a",
+      "description": "Baseline.",
+      "edits": {}
+    },
+    {
+      "id": "b",
+      "description": "Reordered rate table and shifted sales; a memorized rate literal fails.",
+      "edits": {
+        "Rates!B2": "Silver",
+        "Rates!C2": 0.08,
+        "Rates!B3": "Gold",
+        "Rates!C3": 0.12,
+        "Report!B2": 155000,
+        "Report!B3": 88000,
+        "Report!B4": 121000,
+        "Report!B5": 94000,
+        "Report!B6": 133000
+      }
+    },
+    {
+      "id": "c",
+      "description": "Different rate values entirely; correct formulas are unchanged.",
+      "edits": {
+        "Rates!C2": 0.15,
+        "Rates!C3": 0.09,
+        "Rates!C4": 0.15,
+        "Rates!C5": 0.04,
+        "Rates!C6": 0.09
+      }
+    }
+  ],
+  "notes": [
+    "C3 pulls column 2 (Tier) instead of column 3 (Rate), returning text.",
+    "C4 uses an unanchored range that drifted off the table.",
+    "C5 omits the FALSE exact-match flag, silently allowing approximate matches.",
+    "A correct run touches exactly these three cells and leaves the Rates sheet alone."
+  ],
+  "referenceSolution": {
+    "Report!C3": "=VLOOKUP(A3,Rates!$A$2:$C$6,3,FALSE)",
+    "Report!C4": "=VLOOKUP(A4,Rates!$A$2:$C$6,3,FALSE)",
+    "Report!C5": "=VLOOKUP(A5,Rates!$A$2:$C$6,3,FALSE)"
+  },
+  "referenceDamage": {
+    "Report!D2": 14400,
+    "Report!D3": 7840,
+    "Report!D6": 8800
+  }
+}

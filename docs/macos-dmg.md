@@ -173,4 +173,4 @@ Expedient-AI-Bridges-1.1.0.spdx.json
 
 ## Work still required
 
-The public repository currently lacks the native Windows companion source and the unminified current bridge source used in v1.1.0. Recover or recreate those first, establish one cross-platform payload contract, and only then implement the macOS shell. The installed Windows payload is useful as behavioral evidence—not as a source substitute.
+The repository now contains the current v1.1.0 compiled bridge bundles and the complete Office plugin source recovered from the local development tree. The remaining implementation step is a cross-platform native shell: define a stable payload/lifecycle contract, implement the macOS menu-bar companion from committed source, and connect it to the same bridge and Office builds. The Windows setup and installed launcher remain behavioral references for matching install, startup, configuration, and uninstall semantics.

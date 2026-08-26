@@ -33,3 +33,14 @@ jobs:
       - name: Verify current payload and secret boundaries
         shell: pwsh
         run: ./tests/verify-release.ps1
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Install Office plugin dependencies
+        working-directory: office-plugin
+        run: pnpm install --frozen-lockfile
+      - name: Test and build Office plugin
+        working-directory: office-plugin
+        run: |
+          pnpm test
+          pnpm build

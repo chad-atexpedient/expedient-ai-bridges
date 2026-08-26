@@ -1,0 +1,81 @@
+name: CTRL Office Add-in CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm test
+      - run: pnpm exec vite build
+      - run: pnpm validate:manifest
+      - run: pnpm security:release-gates
+      - name: Agent eval grader self-test
+        run: pnpm eval:self-test
+      - name: Validate eval task corpus specs
+        run: pnpm eval:validate
+      - name: Verify corpus separates clean runs from destructive runs
+        run: pnpm eval:check-corpus
+      - name: Validate generated Office package lane
+        run: pnpm test -- tests/generatedOffice.test.mjs
+      - name: Verify production container definition
+        shell: bash
+        run: |
+          grep -q 'pnpm install --frozen-lockfile' deploy/production/Dockerfile
+          grep -q 'USER app' deploy/production/Dockerfile
+          grep -q 'readyz' deploy/production/scripts/smoke-test.mjs
+      - name: UI smoke prerequisites
+        shell: bash
+        run: |
+          pnpm exec vite preview --host 127.0.0.1 --port 4173 > /tmp/ctrl-vite-preview.log 2>&1 &
+          echo $! > /tmp/ctrl-vite-preview.pid
+          for attempt in {1..30}; do curl --fail --silent http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          UI_SMOKE_ALLOW_STATIC_API=true pnpm smoke:ui -- http://127.0.0.1:4173
+          kill "$(cat /tmp/ctrl-vite-preview.pid)"
+      - name: Reject placeholder production packaging
+        shell: bash
+        run: |
+          if node tools/make-production-manifest.mjs https://ctrl-ai.example.com; then
+            echo "Production packaging unexpectedly accepted missing Entra configuration"
+            exit 1
+          fi
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: false
+      - name: Build production container
+        run: docker build --pull -f deploy/production/Dockerfile -t ctrl-byok-office-addin:ci .
+      - name: Container vulnerability scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ctrl-byok-office-addin:ci
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ctrl-byok-office-addin:ci
+          artifact-name: ctrl-office-addin-sbom.spdx.json
+          output-file: ctrl-office-addin-sbom.spdx.json
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctrl-office-addin-sbom
+          path: ctrl-office-addin-sbom.spdx.json

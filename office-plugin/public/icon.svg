@@ -1,0 +1,7 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="CTRL AI">
+  <rect width="64" height="64" rx="12" fill="#2458d3"/>
+  <path d="M18 34c8-19 20-19 28 0" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  <path d="M19 43h26" stroke="#11a37f" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="24" cy="24" r="4" fill="#fff"/>
+  <circle cx="40" cy="24" r="4" fill="#fff"/>
+</svg>

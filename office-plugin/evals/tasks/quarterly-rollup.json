@@ -1,0 +1,141 @@
+{
+  "id": "quarterly-rollup",
+  "description": "Add a Q4 column and a growth column to a rollup without disturbing prior quarters.",
+  "prompt": "Add Q4 revenue for each region using the values in the Q4 Data sheet, then add a QoQ growth column comparing Q4 to Q3. Leave the existing quarters alone.",
+  "protectedSheets": [
+    "Q4 Data"
+  ],
+  "budget": {
+    "maxToolCalls": 20,
+    "maxMinutes": 8
+  },
+  "seed": {
+    "sheets": [
+      {
+        "name": "Rollup",
+        "rows": [
+          [
+            "Region",
+            "Q1",
+            "Q2",
+            "Q3"
+          ],
+          [
+            "North",
+            120,
+            135,
+            150
+          ],
+          [
+            "South",
+            90,
+            95,
+            88
+          ],
+          [
+            "East",
+            210,
+            205,
+            240
+          ],
+          [
+            "West",
+            175,
+            190,
+            199
+          ],
+          [
+            "Total",
+            "=SUM(B2:B5)",
+            "=SUM(C2:C5)",
+            "=SUM(D2:D5)"
+          ]
+        ]
+      },
+      {
+        "name": "Q4 Data",
+        "rows": [
+          [
+            "Region",
+            "Q4"
+          ],
+          [
+            "North",
+            168
+          ],
+          [
+            "South",
+            84
+          ],
+          [
+            "East",
+            262
+          ],
+          [
+            "West",
+            214
+          ]
+        ]
+      }
+    ]
+  },
+  "targetFixes": {
+    "Rollup!E2": "=('Q4 Data'!B2)",
+    "Rollup!E3": "=('Q4 Data'!B3)",
+    "Rollup!E4": "=('Q4 Data'!B4)",
+    "Rollup!E5": "=('Q4 Data'!B5)",
+    "Rollup!E6": "=SUM(E2:E5)",
+    "Rollup!F2": "=(E2-D2)/D2",
+    "Rollup!F3": "=(E3-D3)/D3",
+    "Rollup!F4": "=(E4-D4)/D4",
+    "Rollup!F5": "=(E5-D5)/D5"
+  },
+  "expectedValues": {},
+  "allowedEdits": [
+    "Rollup!E1",
+    "Rollup!F1",
+    "Rollup!F6"
+  ],
+  "variants": [
+    {
+      "id": "a",
+      "description": "Baseline.",
+      "edits": {}
+    },
+    {
+      "id": "b",
+      "description": "Different Q3 and Q4 figures; growth answers shift but formulas do not.",
+      "edits": {
+        "Rollup!D2": 143,
+        "Rollup!D3": 101,
+        "Rollup!D4": 228,
+        "Rollup!D5": 186,
+        "Q4 Data!B2": 155,
+        "Q4 Data!B3": 112,
+        "Q4 Data!B4": 249,
+        "Q4 Data!B5": 201
+      }
+    }
+  ],
+  "notes": [
+    "A correct run adds columns E and F and extends the Total row.",
+    "Overwriting Q1-Q3 values or flattening the existing Total formulas is a destructive failure.",
+    "Header cells and the growth total are allowed edits, not graded fixes."
+  ],
+  "referenceSolution": {
+    "Rollup!E2": "=('Q4 Data'!B2)",
+    "Rollup!E3": "=('Q4 Data'!B3)",
+    "Rollup!E4": "=('Q4 Data'!B4)",
+    "Rollup!E5": "=('Q4 Data'!B5)",
+    "Rollup!E6": "=SUM(E2:E5)",
+    "Rollup!F2": "=(E2-D2)/D2",
+    "Rollup!F3": "=(E3-D3)/D3",
+    "Rollup!F4": "=(E4-D4)/D4",
+    "Rollup!F5": "=(E5-D5)/D5"
+  },
+  "referenceDamage": {
+    "Rollup!B6": 595,
+    "Rollup!C6": 625,
+    "Rollup!D6": 677
+  }
+}

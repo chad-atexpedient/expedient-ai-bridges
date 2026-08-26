@@ -1,0 +1,151 @@
+{
+  "id": "margin-model-doctor",
+  "description": "A margin model has three broken formulas. Fix them without disturbing the rest of the model.",
+  "prompt": "The Margin column on the Model sheet is wrong for a few products, and the Total row does not match. Find and fix the broken formulas. Do not change the Inputs sheet.",
+  "protectedSheets": [
+    "Inputs"
+  ],
+  "budget": {
+    "maxToolCalls": 25,
+    "maxMinutes": 10
+  },
+  "seed": {
+    "sheets": [
+      {
+        "name": "Inputs",
+        "rows": [
+          [
+            "Parameter",
+            "Value"
+          ],
+          [
+            "Tax Rate",
+            0.21
+          ],
+          [
+            "Discount",
+            0.1
+          ]
+        ]
+      },
+      {
+        "name": "Model",
+        "rows": [
+          [
+            "Product",
+            "Units",
+            "Price",
+            "Cost",
+            "Revenue",
+            "Margin"
+          ],
+          [
+            "Alpha",
+            100,
+            25,
+            18,
+            "=B2*C2",
+            "=(E2-B2*D2)/E2"
+          ],
+          [
+            "Bravo",
+            250,
+            12,
+            9,
+            "=B3*C3",
+            "=(E3-B3*D3)/E3"
+          ],
+          [
+            "Charlie",
+            80,
+            40,
+            26,
+            "=B4*C4",
+            "0.35"
+          ],
+          [
+            "Delta",
+            60,
+            55,
+            41,
+            "=B5*C5",
+            "=(E5-B5*D5)/E5"
+          ],
+          [
+            "Echo",
+            120,
+            18,
+            12,
+            "=B6*C6",
+            "=(E6-B6*D6)/E5"
+          ],
+          [
+            "Total",
+            "=SUM(B2:B6)",
+            "",
+            "",
+            "=SUM(E2:E5)",
+            "=(E7-SUMPRODUCT(B2:B6,D2:D6))/E7"
+          ]
+        ]
+      }
+    ]
+  },
+  "targetFixes": {
+    "Model!F4": "=(E4-B4*D4)/E4",
+    "Model!F6": "=(E6-B6*D6)/E6",
+    "Model!E7": "=SUM(E2:E6)"
+  },
+  "expectedValues": {},
+  "variants": [
+    {
+      "id": "a",
+      "description": "Baseline literals.",
+      "edits": {}
+    },
+    {
+      "id": "b",
+      "description": "Perturbed units and prices; a memorized numeric answer fails here.",
+      "edits": {
+        "Model!B2": 140,
+        "Model!C2": 22,
+        "Model!B3": 310,
+        "Model!C3": 15,
+        "Model!B4": 95,
+        "Model!C4": 37,
+        "Model!B5": 75,
+        "Model!C5": 49,
+        "Model!B6": 160,
+        "Model!C6": 21
+      }
+    },
+    {
+      "id": "c",
+      "description": "Perturbed costs; margin values shift while the correct formulas stay identical.",
+      "edits": {
+        "Model!D2": 15,
+        "Model!D3": 7,
+        "Model!D4": 31,
+        "Model!D5": 38,
+        "Model!D6": 14
+      }
+    }
+  ],
+  "allowedEdits": [],
+  "notes": [
+    "F4 was hardcoded to a literal, destroying the formula.",
+    "F6 divides by the wrong row (E5 instead of E6).",
+    "E7 omits the last row from its SUM range.",
+    "A correct run touches exactly these three cells."
+  ],
+  "referenceSolution": {
+    "Model!F4": "=(E4-B4*D4)/E4",
+    "Model!F6": "=(E6-B6*D6)/E6",
+    "Model!E7": "=SUM(E2:E6)"
+  },
+  "referenceDamage": {
+    "Model!E2": 2500,
+    "Model!E3": 3000,
+    "Model!F2": 0.28
+  }
+}

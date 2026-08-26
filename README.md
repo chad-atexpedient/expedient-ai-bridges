@@ -55,7 +55,7 @@ The installer copies the payload to `%LOCALAPPDATA%\ExpedientAIBridges\app`, pre
 
 ## Source and release status
 
-The files in `bridge/app` are compiled/minified runtime bundles. This repository currently lacks their unminified source, source maps, dependency manifest, tests, and source for the newer native Windows companion. See the report for the inspected scope and release recommendations.
+The files in `bridge/app` are the exact compiled/minified v1.1.0 runtime bundles recovered from the installed package and guarded by release verification. The complete Office plugin source is available under `office-plugin/`, including its lockfile, tests, build scripts, and deployment documentation. The native Windows companion is distributed in the setup EXE; a source-buildable cross-platform shell remains the next packaging milestone.
 
 ## Releases and platform plans
 

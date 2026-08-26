@@ -44,15 +44,11 @@ These files must be generated or preserved locally by the installer. They are no
 
 ## Source provenance boundary
 
-The repository contains the script-based bridge edition. It does not yet contain all first-party source required to reproduce v1.1.0, including:
+The repository now includes the current v1.1.0 compiled bridge bundles, their validated configuration template, launch/supervisor scripts, and the complete Office plugin source tree with its lockfile, tests, evaluations, build scripts, and deployment documentation.
 
-- unminified current bridge source and source maps;
-- native companion/installer project;
-- current package build definition and pinned dependency closure;
-- complete Office plugin release source as assembled in setup;
-- tests and reproducible release pipeline.
+The setup EXE remains the canonical packaged Windows release. The first-party native companion/installer source was not present as a separate C#/Rust/Tauri project in the searched desktop, Downloads, Documents, or temporary build trees; its behavior is represented by the packaged executable and documented interfaces. A future reproducible release should implement or recover that shell in source form, then build the setup package from CI rather than harvesting installed files.
 
-The setup EXE is published for installation and inspection with this limitation clearly disclosed. Installed binaries are evidence, not a substitute for missing source.
+The current bridge JavaScript is the exact compiled payload used by v1.1.0. If an earlier TypeScript/unminified bridge project is recovered, it should be added with its build definition and proven to reproduce these bundle blobs.
 
 ## Next release gates
 

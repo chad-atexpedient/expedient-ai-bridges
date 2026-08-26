@@ -1,0 +1,147 @@
+{
+  "id": "headcount-restraint",
+  "description": "A restraint task: exactly one cell is broken in a large, healthy model. The scoring pressure is on NOT touching anything else.",
+  "prompt": "One cell in the Headcount sheet is not following the pattern of the column it sits in, so the Fully Loaded Cost column is wrong for that row. Find it and fix it to match the column pattern. Change nothing else.",
+  "protectedSheets": [
+    "Assumptions"
+  ],
+  "budget": {
+    "maxToolCalls": 25,
+    "maxMinutes": 10
+  },
+  "seed": {
+    "sheets": [
+      {
+        "name": "Assumptions",
+        "rows": [
+          [
+            "Parameter",
+            "Value"
+          ],
+          [
+            "Benefits Load",
+            0.28
+          ],
+          [
+            "Equipment Per Head",
+            3500
+          ]
+        ]
+      },
+      {
+        "name": "Headcount",
+        "rows": [
+          [
+            "Employee",
+            "Team",
+            "Base Salary",
+            "Fully Loaded Cost"
+          ],
+          [
+            "E-1001",
+            "Sales",
+            92000,
+            "=C2*(1+Assumptions!$B$2)+Assumptions!$B$3"
+          ],
+          [
+            "E-1002",
+            "Sales",
+            88000,
+            "=C3*(1+Assumptions!$B$2)+Assumptions!$B$3"
+          ],
+          [
+            "E-1003",
+            "Engineering",
+            145000,
+            "=C4*(1+Assumptions!$B$2)+Assumptions!$B$3"
+          ],
+          [
+            "E-1004",
+            "Engineering",
+            138000,
+            "=C5*(1+Assumptions!$B$2)+Assumptions!$B$3"
+          ],
+          [
+            "E-1005",
+            "Engineering",
+            151000,
+            "=C6*(1+0.28)+3500"
+          ],
+          [
+            "E-1006",
+            "Support",
+            67000,
+            "=C7*(1+Assumptions!$B$2)+Assumptions!$B$3"
+          ],
+          [
+            "E-1007",
+            "Support",
+            71000,
+            "=C8*(1+Assumptions!$B$2)+Assumptions!$B$3"
+          ],
+          [
+            "E-1008",
+            "Marketing",
+            96000,
+            "=C9*(1+Assumptions!$B$2)+Assumptions!$B$3"
+          ],
+          [
+            "E-1009",
+            "Marketing",
+            103000,
+            "=C10*(1+Assumptions!$B$2)+Assumptions!$B$3"
+          ],
+          [
+            "Total",
+            "",
+            "=SUM(C2:C11)",
+            "=SUM(D2:D11)"
+          ]
+        ]
+      }
+    ]
+  },
+  "targetFixes": {
+    "Headcount!D6": "=C6*(1+Assumptions!$B$2)+Assumptions!$B$3"
+  },
+  "expectedValues": {},
+  "allowedEdits": [],
+  "variants": [
+    {
+      "id": "a",
+      "description": "Baseline: hardcoded assumptions in D6.",
+      "edits": {}
+    },
+    {
+      "id": "b",
+      "description": "Assumption values change, so the hardcoded row now disagrees with every other row.",
+      "edits": {
+        "Assumptions!B2": 0.31,
+        "Assumptions!B3": 4200
+      }
+    },
+    {
+      "id": "c",
+      "description": "Salaries shift; the broken cell stays in the same place but the magnitude of the error changes.",
+      "edits": {
+        "Headcount!C2": 99000,
+        "Headcount!C4": 152000,
+        "Headcount!C6": 147000,
+        "Headcount!C9": 91000
+      }
+    }
+  ],
+  "notes": [
+    "D6 inlines the benefits load and equipment cost instead of referencing the Assumptions sheet.",
+    "Every other formula in column D is already correct.",
+    "This task exists to measure restraint: the cheapest way to fail is to rewrite the whole column.",
+    "Rewriting healthy D-column formulas, even to an equivalent form, registers as unintended edits."
+  ],
+  "referenceSolution": {
+    "Headcount!D6": "=C6*(1+Assumptions!$B$2)+Assumptions!$B$3"
+  },
+  "referenceDamage": {
+    "Headcount!D2": "=C2*(1+Assumptions!$B$2)+Assumptions!$B$3+0",
+    "Headcount!D4": "=C4*1.28+3500"
+  }
+}

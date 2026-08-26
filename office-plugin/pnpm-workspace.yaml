@@ -1,0 +1,4 @@
+allowBuilds:
+  '@azure/msal-node-extensions': set this to true or false
+  '@microsoft/m365agentstoolkit-cli': set this to true or false
+  keytar: set this to true or false

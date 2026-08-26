@@ -1,0 +1,161 @@
+{
+  "id": "budget-variance-audit",
+  "description": "A budget-vs-actual sheet has sign-flipped variance formulas, a hardcoded total, and a percentage that divides by the wrong base.",
+  "prompt": "The Variance and Variance % columns on the Summary sheet are inconsistent: some rows show favorable amounts as negative, the total row does not tie, and one percentage uses the wrong denominator. Make the variance convention consistent as Actual minus Budget, fix the total, and base every percentage on Budget. Do not change the Actuals or Budget source sheets.",
+  "protectedSheets": [
+    "Source"
+  ],
+  "budget": {
+    "maxToolCalls": 35,
+    "maxMinutes": 15
+  },
+  "seed": {
+    "sheets": [
+      {
+        "name": "Source",
+        "rows": [
+          [
+            "Department",
+            "Budget",
+            "Actual"
+          ],
+          [
+            "Sales",
+            250000,
+            268000
+          ],
+          [
+            "Marketing",
+            180000,
+            171000
+          ],
+          [
+            "Engineering",
+            420000,
+            455000
+          ],
+          [
+            "Support",
+            95000,
+            92000
+          ],
+          [
+            "Facilities",
+            60000,
+            64000
+          ]
+        ]
+      },
+      {
+        "name": "Summary",
+        "rows": [
+          [
+            "Department",
+            "Budget",
+            "Actual",
+            "Variance",
+            "Variance %"
+          ],
+          [
+            "Sales",
+            "=Source!B2",
+            "=Source!C2",
+            "=C2-B2",
+            "=D2/B2"
+          ],
+          [
+            "Marketing",
+            "=Source!B3",
+            "=Source!C3",
+            "=B3-C3",
+            "=D3/B3"
+          ],
+          [
+            "Engineering",
+            "=Source!B4",
+            "=Source!C4",
+            "=C4-B4",
+            "=D4/C4"
+          ],
+          [
+            "Support",
+            "=Source!B5",
+            "=Source!C5",
+            "=B5-C5",
+            "=D5/B5"
+          ],
+          [
+            "Facilities",
+            "=Source!B6",
+            "=Source!C6",
+            "=C6-B6",
+            "=D6/B6"
+          ],
+          [
+            "Total",
+            "=SUM(B2:B6)",
+            "=SUM(C2:C6)",
+            44000,
+            "=D7/B7"
+          ]
+        ]
+      }
+    ]
+  },
+  "targetFixes": {
+    "Summary!D3": "=C3-B3",
+    "Summary!D5": "=C5-B5",
+    "Summary!E4": "=D4/B4",
+    "Summary!D7": "=SUM(D2:D6)"
+  },
+  "expectedValues": {},
+  "allowedEdits": [],
+  "variants": [
+    {
+      "id": "a",
+      "description": "Baseline.",
+      "edits": {}
+    },
+    {
+      "id": "b",
+      "description": "Shifted budgets and actuals so the hardcoded total is wrong by a different amount.",
+      "edits": {
+        "Source!B2": 275000,
+        "Source!C2": 259000,
+        "Source!B3": 165000,
+        "Source!C3": 188000,
+        "Source!B4": 390000,
+        "Source!C4": 402000,
+        "Source!B5": 102000,
+        "Source!C5": 97000,
+        "Source!B6": 71000,
+        "Source!C6": 68000
+      }
+    },
+    {
+      "id": "c",
+      "description": "One department swings from favorable to unfavorable, changing the sign of the answer.",
+      "edits": {
+        "Source!C3": 205000,
+        "Source!C5": 111000
+      }
+    }
+  ],
+  "notes": [
+    "D3 and D5 use Budget minus Actual, flipping the sign against the stated convention.",
+    "E4 divides by Actual instead of Budget.",
+    "D7 is a hardcoded literal that will not tie once any variance changes.",
+    "A correct run touches exactly these four cells; rewriting the healthy cross-sheet references in columns B and C is a destructive failure."
+  ],
+  "referenceSolution": {
+    "Summary!D3": "=C3-B3",
+    "Summary!D5": "=C5-B5",
+    "Summary!E4": "=D4/B4",
+    "Summary!D7": "=SUM(D2:D6)"
+  },
+  "referenceDamage": {
+    "Summary!B2": 250000,
+    "Summary!C2": 268000,
+    "Summary!B4": 420000
+  }
+}
