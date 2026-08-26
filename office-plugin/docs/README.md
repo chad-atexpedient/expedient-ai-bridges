@@ -1,4 +1,4 @@
-# CTRL BYOK Office Add-in docs
+# Expedient AI Workspace docs
 
 This folder is the project knowledge base. Use it with the production deployment lane under `deploy/production/`.
 
@@ -18,7 +18,7 @@ This folder is the project knowledge base. Use it with the production deployment
 - `../deploy/production/README.md` - production hosting/package lane.
 - `../deploy/production/m365-centralized-deployment.md` - Microsoft 365 Admin Center deployment steps.
 - `../deploy/production/.env.example` - production environment variable template.
-- `../scripts/package-release.mjs` - creates `dist/release/ctrl-byok-office-addin/` handoff packages for production or local sideload QA.
+- `../scripts/package-release.mjs` - creates `dist/release/expedient-ai-workspace/` handoff packages for production or local sideload QA.
 
 ## Repo map
 

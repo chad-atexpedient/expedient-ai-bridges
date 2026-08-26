@@ -5,7 +5,7 @@ import zlib from "node:zlib";
 import { isProduction } from "./security.mjs";
 
 const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";
-const defaultStateDir = path.join(process.env.LOCALAPPDATA || process.env.APPDATA || os.tmpdir(), "CTRL-BYOK-Office-Addin");
+const defaultStateDir = path.join(process.env.LOCALAPPDATA || process.env.APPDATA || os.tmpdir(), "ExpedientAIBridges", "office");
 const productionTokenStates = new Map();
 
 function productionState(identity = {}) {

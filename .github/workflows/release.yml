@@ -1,0 +1,42 @@
+name: Signed release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version: { description: "Release version", required: true, default: "1.2.0" }
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+environment: production-release
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, persist-credentials: false }
+      - name: Require canonical version and complete signing configuration
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          WINDOWS_SIGNING_CONFIGURED: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT != '' }}
+          APPLE_SIGNING_CONFIGURED: ${{ secrets.APPLE_DEVELOPER_ID_P12 != '' }}
+          APPLE_NOTARY_CONFIGURED: ${{ secrets.APPLE_NOTARY_KEY != '' }}
+        run: |
+          set -euo pipefail
+          test "$VERSION" = "$(jq -r .version release/version.json)"
+          test "$WINDOWS_SIGNING_CONFIGURED" = true || { echo 'Windows signing is required.' >&2; exit 1; }
+          test "$APPLE_SIGNING_CONFIGURED" = true || { echo 'Apple Developer ID signing is required.' >&2; exit 1; }
+          test "$APPLE_NOTARY_CONFIGURED" = true || { echo 'Apple notarization is required.' >&2; exit 1; }
+      - name: Full history secret scan must pass
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+      - name: Release policy
+        run: |
+          echo 'The protected production-release environment must invoke the package workflow, Authenticode-sign and RFC3161-timestamp Windows executables, Developer-ID sign nested macOS code, notarize and staple DMGs, verify both trust chains, regenerate final SHA256SUMS/SBOMs, and attest only final published subjects.'
+          echo 'This gate fails closed when any signing/notarization credential is absent; unsigned artifacts are never normal production releases.'

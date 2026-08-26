@@ -1,0 +1,14 @@
+title = "Expedient AI Bridges secret scanning policy"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documented non-secret placeholder values"
+regexTarget = "match"
+regexes = [
+  '''your-key-here''',
+  '''<secret-or-cert-backed-credential-for-OBO>''',
+  '''<real-client-id>''',
+  '''00000000-0000-0000-0000-000000000000'''
+]

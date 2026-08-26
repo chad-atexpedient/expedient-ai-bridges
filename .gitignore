@@ -31,3 +31,34 @@ Thumbs.db
 **/obj/
 artifacts/
 
+# Additional credentials, keystores, and user-local state
+*.cer
+*.der
+*.p7b
+*.p7c
+*.jks
+*.keystore
+*.kdbx
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+secrets.json
+credentials*.json
+token*.json
+native-pids.json
+supervisor.json
+stop.request
+*.user
+*.suo
+*.trx
+.vs/
+TestResults/
+coverage/
+publish/
+**/launchSettings.json
+**/appsettings.*.json
+!**/appsettings.*.example.json
+!**/.env.example
+!**/.env.*.example
+

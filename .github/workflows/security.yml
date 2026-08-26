@@ -1,0 +1,38 @@
+name: Secret and history scan
+
+# Full-history scan; configure this check as required branch protection.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan complete Git history
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+      - name: Verify forbidden mutable files are untracked
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden='(^|/)(config\.env|.*\.(pem|key|pfx|p12)|bridge-pids\.json|native-pids\.json)$|(^|/)(logs?|runtime)/'
+          if git ls-files | grep -E "$forbidden"; then
+            echo "Forbidden mutable credential/state file is tracked." >&2
+            exit 1
+          fi

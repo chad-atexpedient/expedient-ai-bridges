@@ -1,4 +1,4 @@
-﻿import type { AppSettings } from "./types";
+import type { AppSettings } from "./types";
 
 export const RECOMMENDED_AUTO_MODELS: [string, string, string] = ["GPT-5-Mini", "GPT-5.4", "GPT-5.5"];
 
@@ -17,7 +17,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     useLocalProxy: true,
   },
   branding: {
-    productName: "CTRL AI",
+    productName: "Expedient AI Workspace",
     primaryColor: "#2458d3",
     accentColor: "#11a37f",
     logoDataUrl: null,

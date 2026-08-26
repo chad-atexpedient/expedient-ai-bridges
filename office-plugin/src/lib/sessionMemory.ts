@@ -12,7 +12,7 @@ export interface ChatMemoryRecord {
   updatedAt: string;
 }
 
-const SESSION_MEMORY_KEY = "ctrl-byok-office-addin:session-memory:v1";
+const SESSION_MEMORY_KEY = "expedient-ai-workspace:session-memory:v2";
 const MAX_MEMORIES = 24;
 const MAX_SUMMARY_CHARS = 3600;
 const STOPWORDS = new Set([

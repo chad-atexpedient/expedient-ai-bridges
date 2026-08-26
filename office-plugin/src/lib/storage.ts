@@ -1,8 +1,9 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 import { DEFAULT_SETTINGS, RECOMMENDED_AUTO_MODELS } from "./defaults";
 import type { AppSettings } from "./types";
 
-const STORAGE_KEY = "ctrl-byok-office-addin:v1";
+const STORAGE_KEY = "expedient-ai-workspace:v2";
+const LEGACY_STORAGE_KEY = "ctrl-byok-office-addin:v1";
 const SETTINGS_API_PATH = "/api/settings";
 
 const nullableNumber = z.union([z.number(), z.null()]).default(null);
@@ -50,7 +51,18 @@ export function parseSettings(value: unknown): AppSettings {
 }
 
 export function loadSettings(storage: Storage = window.localStorage): AppSettings {
-  const raw = storage.getItem(STORAGE_KEY);
+  let raw = storage.getItem(STORAGE_KEY);
+  if (!raw) {
+    const legacy = storage.getItem(LEGACY_STORAGE_KEY);
+    if (legacy) {
+      try {
+        const migrated = parseSettings(JSON.parse(legacy));
+        const safe = migrated.deploymentMode === "managed" ? { ...migrated, provider: { ...migrated.provider, apiKey: "" } } : migrated;
+        storage.setItem(STORAGE_KEY, JSON.stringify(safe));
+        raw = storage.getItem(STORAGE_KEY);
+      } catch { /* Preserve legacy state for rollback. */ }
+    }
+  }
   if (!raw) return DEFAULT_SETTINGS;
 
   try {

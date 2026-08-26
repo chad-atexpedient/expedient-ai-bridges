@@ -1,4 +1,4 @@
-﻿# Production launch checklist
+# Production launch checklist
 
 Use this checklist when moving from local sideloading to a managed Microsoft 365 rollout.
 
@@ -116,22 +116,22 @@ node scripts/package-release.mjs
 Expected handoff output:
 
 ```text
-dist/release/ctrl-byok-office-addin/
-dist/release/ctrl-byok-office-addin/RELEASE_REPORT.md
-dist/release/ctrl-byok-office-addin/manifest.xml
+dist/release/expedient-ai-workspace/
+dist/release/expedient-ai-workspace/RELEASE_REPORT.md
+dist/release/expedient-ai-workspace/manifest.xml
 ```
 
 Before uploading the packaged manifest:
 
 - [ ] Confirm the release package was created in production mode, not with `--dev`.
 - [ ] Review `RELEASE_REPORT.md` for package name, version, generation time, contents, and checksums.
-- [ ] Confirm `dist/release/ctrl-byok-office-addin/manifest.xml` contains the final HTTPS origin and real Entra app ID/resource.
+- [ ] Confirm `dist/release/expedient-ai-workspace/manifest.xml` contains the final HTTPS origin and real Entra app ID/resource.
 
 Deploy either directly or via container:
 
 ```powershell
-docker build -f deploy/production/Dockerfile -t ctrl-byok-office-addin:latest .
-docker run --rm -p 3000:3000 --env-file deploy/production/.env.example ctrl-byok-office-addin:latest
+docker build -f deploy/production/Dockerfile -t expedient-ai-workspace:latest .
+docker run --rm -p 3000:3000 --env-file deploy/production/.env.example expedient-ai-workspace:latest
 ```
 
 Smoke test:
@@ -243,7 +243,6 @@ node deploy/production/scripts/smoke-test.mjs https://ctrl-ai.example.com
 The manifest command must receive real `MSAL_CLIENT_ID` and `OFFICE_SSO_RESOURCE` values. It intentionally fails when values are missing, when the origin is not HTTPS, or when placeholders remain.
 
 After these pass, upload `dist/manifest.production.xml` through Microsoft 365 Centralized Deployment.
-
 
 
 

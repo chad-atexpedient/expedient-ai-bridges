@@ -7,7 +7,7 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const args = new Set(process.argv.slice(2));
 const devMode = args.has("--dev") || args.has("--sideload");
 const releaseRoot = path.join(root, "dist", "release");
-const releaseDir = path.join(releaseRoot, "ctrl-byok-office-addin");
+const releaseDir = path.join(releaseRoot, "expedient-ai-workspace");
 const rel = (value) => path.relative(root, value).replace(/\\/g, "/");
 
 async function exists(filePath) {
@@ -68,11 +68,11 @@ for (const file of ["manifest.xml", "package.json", "pnpm-lock.yaml", "app/index
   hashes.push(`- ${file}: ${await sha256(file)}`);
 }
 
-const report = `# CTRL BYOK Office Add-in release package
+const report = `# Expedient AI Workspace release package
 
 Mode: ${devMode ? "development sideload" : "production"}
 Package: ${packageJson.name}@${packageJson.version}
-Generated: ${new Date().toISOString()}
+Source commit epoch: ${process.env.SOURCE_DATE_EPOCH || "not supplied"}
 
 ## Contents
 

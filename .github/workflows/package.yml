@@ -1,0 +1,52 @@
+name: Package release candidates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            node: node-v22.22.0-win-x64.zip
+          - os: macos-14
+            rid: osx-arm64
+            node: node-v22.22.0-darwin-arm64.tar.gz
+          - os: macos-15-intel
+            rid: osx-x64
+            node: node-v22.22.0-darwin-x64.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "10.0.301" }
+      - name: Build deterministic companion
+        run: dotnet publish companion/src/ExpedientBridges/ExpedientBridges.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:ContinuousIntegrationBuild=true -p:Deterministic=true -o out/publish
+      - name: Download pinned Node runtime
+        shell: pwsh
+        run: Invoke-WebRequest "https://nodejs.org/dist/v22.22.0/${{ matrix.node }}" -OutFile "out/${{ matrix.node }}"
+      - name: Stage allowlisted payload
+        shell: pwsh
+        run: ./eng/stage-release.ps1 -Rid ${{ matrix.rid }} -PublishDir out/publish -NodeArchive "out/${{ matrix.node }}" -OutputDir out
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with: { path: "out/stage-${{ matrix.rid }}", format: spdx-json, output-file: "out/Expedient-AI-Bridges-1.2.0-${{ matrix.rid }}.spdx.json" }
+      - name: Create platform artifact and checksums
+        shell: pwsh
+        run: |
+          if ('${{ runner.os }}' -eq 'Windows') { Compress-Archive 'out/stage-${{ matrix.rid }}/*' 'out/Expedient-AI-Bridges-1.2.0-${{ matrix.rid }}-unsigned.zip' }
+          else { bash packaging/macos/create-dmg.sh 'out/stage-${{ matrix.rid }}/Expedient AI Bridges.app' 'out/Expedient-AI-Bridges-1.2.0-${{ matrix.rid }}-unsigned.dmg' }
+          Get-ChildItem out/Expedient-AI-Bridges-1.2.0-* -File | Sort-Object Name | ForEach-Object { "$( (Get-FileHash $_ -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)" } | Set-Content out/SHA256SUMS-${{ matrix.rid }}.txt
+      - uses: actions/upload-artifact@v4
+        with: { name: "release-candidate-${{ matrix.rid }}", path: "out/Expedient-AI-Bridges-1.2.0-*
+out/SHA256SUMS-*.txt", compression-level: 0 }

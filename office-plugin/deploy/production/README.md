@@ -1,4 +1,4 @@
-﻿# CTRL BYOK Office Add-in - Production Deployment
+# Expedient AI Workspace - Production Deployment
 
 This folder is the path from local sideloading to a centrally deployed Microsoft Office add-in.
 
@@ -56,7 +56,7 @@ npm run package:prod
 This creates:
 
 ```text
-dist/release/ctrl-byok-office-addin/
+dist/release/expedient-ai-workspace/
 ```
 
 The release directory contains the built task-pane app, server runtime files, production manifest copied as `manifest.xml`, deployment docs, the production environment template, Dockerfile, smoke-test script, and `RELEASE_REPORT.md` with package metadata and checksums.
@@ -90,8 +90,8 @@ In real deployment, terminate TLS at your platform/load balancer and expose the 
 From the project root:
 
 ```powershell
-docker build -f deploy/production/Dockerfile -t ctrl-byok-office-addin:1.0.0 .
-docker run --rm -p 3000:3000 --env-file deploy/production/.env.example ctrl-byok-office-addin:1.0.0
+docker build -f deploy/production/Dockerfile -t expedient-ai-workspace:1.0.0 .
+docker run --rm -p 3000:3000 --env-file deploy/production/.env.example expedient-ai-workspace:1.0.0
 ```
 
 ## Smoke test a deployed service
@@ -136,4 +136,4 @@ See `../../docs/office-api-hardening.md` for the full auth ladder and context-re
 
 After hosting the app and generating `dist/manifest.production.xml`, follow `m365-centralized-deployment.md` to deploy it through Microsoft 365 Admin Center so users see the add-in in Excel, Word, and PowerPoint without manual XML sideloading.
 
-If using the packaged handoff directory, upload `dist/release/ctrl-byok-office-addin/manifest.xml` only after confirming the release was created in production mode and the manifest contains the final HTTPS origin and real Entra app ID/resource.
+If using the packaged handoff directory, upload `dist/release/expedient-ai-workspace/manifest.xml` only after confirming the release was created in production mode and the manifest contains the final HTTPS origin and real Entra app ID/resource.

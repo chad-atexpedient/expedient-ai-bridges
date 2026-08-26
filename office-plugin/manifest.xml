@@ -1,14 +1,14 @@
-﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0" xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="TaskPaneApp">
   <Id>f7297364-a1cd-47d0-8db5-f8848dd9ebf0</Id>
   <Version>1.0.2.0</Version>
-  <ProviderName>CTRL</ProviderName>
+  <ProviderName>Expedient</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
-  <DisplayName DefaultValue="CTRL BYOK AI" />
+  <DisplayName DefaultValue="Expedient AI Workspace" />
   <Description DefaultValue="Bring your own OpenAI-compatible or Anthropic-compatible key for Excel, Word, and PowerPoint assistance." />
   <IconUrl DefaultValue="https://localhost:3000/brain-icon-32.png" />
   <HighResolutionIconUrl DefaultValue="https://localhost:3000/brain-icon-80.png" />
-  <SupportUrl DefaultValue="https://localhost:3000" />
+  <SupportUrl DefaultValue="https://github.com/chad-atexpedient/expedient-ai-bridges" />
   <WebApplicationInfo>
     <Id>00000000-0000-0000-0000-000000000000</Id>
     <Resource>api://localhost:3000/00000000-0000-0000-0000-000000000000</Resource>
@@ -122,12 +122,12 @@
         <bt:Url id="GetStarted.Url" DefaultValue="https://localhost:3000" />
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="GetStarted.Title" DefaultValue="CTRL BYOK AI is ready" />
-        <bt:String id="Group.Label" DefaultValue="CTRL AI" />
-        <bt:String id="Button.Label" DefaultValue="Open CTRL AI" />
+        <bt:String id="GetStarted.Title" DefaultValue="Expedient AI Workspace is ready" />
+        <bt:String id="Group.Label" DefaultValue="Expedient AI" />
+        <bt:String id="Button.Label" DefaultValue="Open Expedient AI" />
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="GetStarted.Description" DefaultValue="Open the CTRL AI task pane, upload your logo, and connect your own OpenAI-compatible or Anthropic-compatible key." />
+        <bt:String id="GetStarted.Description" DefaultValue="Open the Expedient AI task pane, apply workspace branding, and connect an approved OpenAI-compatible or Anthropic-compatible provider." />
         <bt:String id="Button.Tooltip" DefaultValue="Open the BYOK AI assistant for this Office file." />
       </bt:LongStrings>
     </Resources>

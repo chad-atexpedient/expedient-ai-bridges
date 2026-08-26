@@ -1,6 +1,6 @@
-﻿# Architecture and file structure
+# Architecture and file structure
 
-CTRL BYOK Office Add-in is one Office task-pane app shared by Excel, Word, and PowerPoint. It has three runtime pieces:
+Expedient AI Workspace is one Office task-pane app shared by Excel, Word, and PowerPoint. It has three runtime pieces:
 
 1. React task pane UI served from the add-in domain.
 2. Office.js host adapters for reading/writing the active Office file.
@@ -107,4 +107,3 @@ These are intentionally simple local implementations today and should be hardene
 | M365 token cache | Local JSON token caches for SSO/device/dev paths. | Backend session/token store with Entra/MSAL and vault controls. |
 | Session memory | `sessionStorage` compact chat records. | Optional vector/index store with retention policy and per-file/user scope. |
 | Provider allowlist | `BYOK_ALLOWED_TARGETS` env. | Enforced enterprise policy with audit logging. |
-

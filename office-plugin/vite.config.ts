@@ -10,7 +10,7 @@ import { handleImageAsset } from "./server/image-asset.mjs";
 import { handleGeneratedOffice } from "./server/generated-office.mjs";
 import { assertSafeOutboundUrl, parseOriginAllowlist } from "./server/security.mjs";
 
-const devSettingsPath = path.join(process.env.LOCALAPPDATA || process.env.APPDATA || os.tmpdir(), "CTRL-BYOK-Office-Addin", "shared-settings.dev.json");
+const devSettingsPath = path.join(process.env.LOCALAPPDATA || process.env.APPDATA || os.tmpdir(), "ExpedientAIBridges", "office", "shared-settings.dev.json");
 
 async function sendJson(res: any, status: number, body: unknown) {
   res.statusCode = status;

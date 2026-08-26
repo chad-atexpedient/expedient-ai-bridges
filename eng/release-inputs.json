@@ -1,0 +1,39 @@
+{
+  "product": "Expedient AI Bridges",
+  "version": "1.2.0",
+  "bundleIdentifier": "com.expedient.ai-bridges",
+  "sourceDateEpochPolicy": "git-commit",
+  "files": [
+    "bridge/app/index.js",
+    "bridge/app/anthropic-bridge.js",
+    "bridge/config.env.example",
+    "release/version.json",
+    "docs/migration-and-state.md",
+    "SECURITY.md"
+  ],
+  "hashes": {
+    "bridge/app/index.js": "09C1A9BB9C1156916BF4D03AA61C879342E8329F196C70C4D7761844A8D107C2",
+    "bridge/app/anthropic-bridge.js": "936D6F959DC486582C2A8F965F0CAB07D94ADED3C04BDDC10AE5ABCF3F780615",
+    "bridge/config.env.example": "1975B4BE1F8730FF52A5E344816205F565A73168279C8EB0DF4EAE2208EDD3F6"
+  },
+  "node": {
+    "version": "22.22.0",
+    "distributions": {
+      "win-x64": {
+        "file": "node-v22.22.0-win-x64.zip",
+        "sha256": "c97fa376d2becdc8863fcd3ca2dd9a83a9f3468ee7ccf7a6d076ec66a645c77a",
+        "member": "node-v22.22.0-win-x64/node.exe"
+      },
+      "osx-arm64": {
+        "file": "node-v22.22.0-darwin-arm64.tar.gz",
+        "sha256": "5ed4db0fcf1eaf84d91ad12462631d73bf4576c1377e192d222e48026a902640",
+        "member": "node-v22.22.0-darwin-arm64/bin/node"
+      },
+      "osx-x64": {
+        "file": "node-v22.22.0-darwin-x64.tar.gz",
+        "sha256": "5ea50c9d6dea3dfa3abb66b2656f7a4e1c8cef23432b558d45fb538c7b5dedce",
+        "member": "node-v22.22.0-darwin-x64/bin/node"
+      }
+    }
+  }
+}

@@ -1,8 +1,8 @@
 {
-  "name": "ctrl-byok-office-addin",
-  "version": "1.0.0",
+  "name": "expedient-ai-workspace",
+  "version": "1.2.0",
   "private": true,
-  "description": "CTRL BYOK AI add-in for Excel, Word, and PowerPoint with OpenAI/Anthropic-compatible providers and uploaded branding.",
+  "description": "Expedient AI Workspace add-in for Excel, Word, and PowerPoint with OpenAI/Anthropic-compatible providers and uploaded branding.",
   "type": "module",
   "scripts": {
     "dev": "node node_modules/vite/bin/vite.js --host localhost --port 3000",
@@ -28,7 +28,7 @@
     "eval:check-corpus": "node evals/run.mjs --check-corpus",
     "eval:seed": "node evals/run.mjs --seed-only",
     "security:release-gates": "node scripts/release-gates.mjs",
-    "security:manifest": "node tools/make-production-manifest.mjs https://ctrl-ai.example.com"
+    "security:manifest": "node tools/make-production-manifest.mjs https://ai-workspace.expedient.example"
   },
   "dependencies": {
     "@vitejs/plugin-basic-ssl": "2.3.0",

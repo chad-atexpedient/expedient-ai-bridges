@@ -1,4 +1,4 @@
-# CTRL BYOK Office Add-in
+# Expedient AI Workspace
 
 A shared Microsoft Office task-pane add-in for Excel, Word, and PowerPoint. It supports BYOK OpenAI-compatible/Anthropic-compatible providers, branded settings, native Office tools, Microsoft 365 file context, and temporary session chat memory.
 

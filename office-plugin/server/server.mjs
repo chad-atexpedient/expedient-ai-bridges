@@ -15,7 +15,7 @@ import { createAuditLogger } from "./observability.mjs";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const defaultDistDir = path.join(root, "dist", "app");
-const defaultSettingsPath = path.join(process.env.LOCALAPPDATA || process.env.APPDATA || os.tmpdir(), "CTRL-BYOK-Office-Addin", "shared-settings.json");
+const defaultSettingsPath = path.join(process.env.LOCALAPPDATA || process.env.APPDATA || os.tmpdir(), "ExpedientAIBridges", "office", "shared-settings.json");
 const rateBuckets = new Map();
 
 const mime = new Map([
@@ -550,7 +550,7 @@ export function startServer(options = {}) {
   const host = options.host || process.env.HOST || "0.0.0.0";
   const server = createAppServer(options);
   server.listen(port, host, () => {
-    console.log(`CTRL BYOK Office add-in server listening on http://${host}:${port}`);
+    console.log(`Expedient AI Workspace server listening on http://${host}:${port}`);
     console.log(`Serving ${options.distDir || defaultDistDir}`);
   });
   return server;

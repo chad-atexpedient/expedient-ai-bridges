@@ -1,0 +1,9 @@
+{
+  "product": "Expedient AI Bridges",
+  "version": "1.2.0",
+  "schema": 2,
+  "bridgePayloadVersion": "1.1.0+6635fb02c61a5e5938ef9c8c8a307cc2dac1a9f8",
+  "officeWorkspaceVersion": "1.2.0",
+  "companionVersion": "1.2.0",
+  "minimumNodeMajor": 22
+}

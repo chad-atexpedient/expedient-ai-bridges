@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "../src/lib/defaults";
 import { loadSettings, loadSharedSettings, saveSettings, saveSharedSettings, SETTINGS_API_PATH } from "../src/lib/storage";
 
@@ -88,7 +88,7 @@ describe("settings storage", () => {
       provider: { ...DEFAULT_SETTINGS.provider, apiKey: "must-not-persist" },
     }, storage);
     expect(loadSettings(storage).provider.apiKey).toBe("");
-    expect(storage.getItem("ctrl-byok-office-addin:v1")).not.toContain("must-not-persist");
+    expect(storage.getItem("expedient-ai-workspace:v2")).not.toContain("must-not-persist");
   });
 });
 

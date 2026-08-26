@@ -75,7 +75,7 @@ export async function fetchImageAsset(target) {
   const response = await fetch(targetUrl, {
     redirect: "error",
     signal: AbortSignal.timeout(Number(process.env.OUTBOUND_TIMEOUT_MS || 15000)),
-    headers: { accept: "image/png,image/jpeg,image/gif,image/webp,image/bmp;q=0.9,*/*;q=0.2", "user-agent": "Mozilla/5.0 CTRL-BYOK-Office-Addin" },
+    headers: { accept: "image/png,image/jpeg,image/gif,image/webp,image/bmp;q=0.9,*/*;q=0.2", "user-agent": "Mozilla/5.0 ExpedientAIBridges", "office" },
   });
   if (!response.ok) throw new Error(`Image fetch failed: ${response.status} ${response.statusText}`);
 
