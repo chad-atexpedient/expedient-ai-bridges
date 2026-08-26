@@ -5,3 +5,23 @@ dist/
 !.env.example
 *.log
 logs/
+
+# Local bridge state and credentials
+config.env
+*.pem
+*.key
+*.pfx
+*.p12
+*.crt
+runtime/
+bridge-pids.json
+
+# Windows/build artifacts
+*.exe
+*.msi
+*.zip
+*.nupkg
+bin/
+obj/
+.DS_Store
+Thumbs.db
