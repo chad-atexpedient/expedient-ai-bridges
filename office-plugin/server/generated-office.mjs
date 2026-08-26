@@ -870,3 +870,1165 @@ function normalizeScatterSeries(chart = {}) {
   const rows = Array.isArray(chart.points) ? chart.points : Array.isArray(chart.values) ? chart.values : [];
   const points = rows.map((row, index) => {
     if (Array.isArray(row)) return { x: Number(row[0]) || 0, y: Number(row[1]) || 0 };
+    if (row && typeof row === "object") return { x: Number(row.x ?? row[0] ?? index + 1) || 0, y: Number(row.y ?? row.value ?? row[1]) || 0 };
+    return { x: index + 1, y: Number(row) || 0 };
+  }).slice(0, 100);
+  return [{ name: chart.seriesName || chart.title || "Series 1", sourceIndex: 0, points }];
+}
+
+function scatterSeriesXml(chart = {}, series = [], options = {}) {
+  const formatCode = xml(chart.valueFormat || chart.numberFormat || "General");
+  const xFormatCode = xml(chart.xValueFormat || chart.xNumberFormat || formatCode);
+  const yFormatCode = xml(chart.yValueFormat || chart.yNumberFormat || formatCode);
+  const useWorkbookRefs = Boolean(options.workbookRefs);
+  return series.map((item, index) => {
+    const xPoints = item.points.map((point, pointIndex) => `<c:pt idx="${pointIndex}"><c:v>${point.x}</c:v></c:pt>`).join("");
+    const yPoints = item.points.map((point, pointIndex) => `<c:pt idx="${pointIndex}"><c:v>${point.y}</c:v></c:pt>`).join("");
+    const xValues = item.points.map((point) => point.x);
+    const yValues = item.points.map((point) => point.y);
+    const sourceIndex = Number.isFinite(Number(item.sourceIndex)) ? Number(item.sourceIndex) : index;
+    const xColumnIndex = sourceIndex * 2;
+    const yColumnIndex = xColumnIndex + 1;
+    const titleXml = useWorkbookRefs
+      ? `<c:tx>${chartStringReference(chartCellFormula(xColumnIndex, 1), [item.name])}</c:tx>`
+      : `<c:tx><c:v>${xml(item.name)}</c:v></c:tx>`;
+    const xXml = useWorkbookRefs && item.points.length
+      ? chartNumberReference(chartRangeFormula(xColumnIndex, 3, xColumnIndex, item.points.length + 2), xValues, xFormatCode)
+      : `<c:numLit><c:formatCode>${xFormatCode}</c:formatCode><c:ptCount val="${item.points.length}"/>${xPoints}</c:numLit>`;
+    const yXml = useWorkbookRefs && item.points.length
+      ? chartNumberReference(chartRangeFormula(yColumnIndex, 3, yColumnIndex, item.points.length + 2), yValues, yFormatCode)
+      : `<c:numLit><c:formatCode>${yFormatCode}</c:formatCode><c:ptCount val="${item.points.length}"/>${yPoints}</c:numLit>`;
+    return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/>${titleXml}${chartSeriesShape(chart, sourceIndex)}<c:xVal>${xXml}</c:xVal><c:yVal>${yXml}</c:yVal></c:ser>`;
+  }).join("");
+}
+
+function chartWorkbookRows(chart = {}) {
+  const tag = chartTypeTag(chart.chartType);
+  if (tag === "c:scatterChart") {
+    const series = normalizeScatterSeries(chart);
+    const maxPoints = Math.max(0, ...series.map((item) => item.points.length));
+    const rows = [
+      series.flatMap((item) => [item.name, ""]),
+      series.flatMap(() => ["X", "Y"]),
+    ];
+    for (let pointIndex = 0; pointIndex < maxPoints; pointIndex += 1) {
+      rows.push(series.flatMap((item) => {
+        const point = item.points[pointIndex];
+        return point ? [point.x, point.y] : ["", ""];
+      }));
+    }
+    return rows;
+  }
+  const normalized = normalizeChartSeries(chart);
+  return [
+    ["Category", ...normalized.series.map((item) => item.name)],
+    ...normalized.categories.map((category, index) => [category, ...normalized.series.map((item) => item.values[index] ?? 0)]),
+  ];
+}
+
+function embeddedChartWorkbook(chart = {}) {
+  return createGeneratedXlsx({ sheets: [{ name: "Chart Data", rows: chartWorkbookRows(chart) }] });
+}
+
+function chartRelsXml(workbookName = "chartData1.xlsx") {
+  return rels([{ id: "rWorkbook", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package", target: `../embeddings/${workbookName}` }]);
+}
+
+function chartXml(chart = {}, options = {}) {
+  const useExternalWorkbook = Boolean(options.externalWorkbook);
+  const normalized = normalizeChartSeries(chart);
+  const categories = normalized.categories;
+  const seriesItems = normalized.series;
+  const chartTag = chartTypeTag(chart.chartType);
+  const isCombo = chartTag === "combo";
+  const isBar = chartTag === "c:barChart";
+  const isPieLike = chartTag === "c:pieChart" || chartTag === "c:doughnutChart";
+  const isScatter = chartTag === "c:scatterChart";
+  const title = chart.title ? `<c:title>${chartRichText(chart.title)}<c:layout/></c:title>` : "";
+  const formatCode = xml(chart.valueFormat || chart.numberFormat || "General");
+  const comboGroups = isCombo ? comboSeriesGroups(chart, categories, seriesItems) : null;
+  const series = isScatter ? `${scatterSeriesXml(chart, normalizeScatterSeries(chart), { workbookRefs: useExternalWorkbook })}${chartDataLabels(chart)}` : `${chartSeriesXml(chart, categories, seriesItems, { workbookRefs: useExternalWorkbook })}${chartDataLabels(chart)}`;
+  const grouping = isScatter ? `<c:scatterStyle val="${chart.scatterStyle || "marker"}"/>` : chartTag === "c:lineChart" || chartTag === "c:areaChart" ? `<c:grouping val="standard"/>` : isBar ? `<c:barDir val="${chart.barDirection === "horizontal" ? "bar" : "col"}"/><c:grouping val="clustered"/>` : chartTag === "c:doughnutChart" ? `<c:holeSize val="${Math.min(90, Math.max(10, Number(chart.holeSize || 50)))}"/>` : "";
+  const axes = isPieLike ? "" : `<c:axId val="123456"/><c:axId val="654321"/>`;
+  const axisXml = isPieLike ? "" : isScatter ? `<c:valAx><c:axId val="123456"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:axPos val="b"/>${chartAxisTitle(chart.categoryAxisTitle || chart.xAxisTitle)}<c:numFmt formatCode="${xml(chart.xValueFormat || chart.xNumberFormat || formatCode)}" sourceLinked="0"/><c:tickLblPos val="nextTo"/><c:crossAx val="654321"/><c:crosses val="autoZero"/></c:valAx><c:valAx><c:axId val="654321"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:axPos val="l"/>${chart.showGridLines === false ? "" : "<c:majorGridlines/>"}${chartAxisTitle(chart.valueAxisTitle || chart.yAxisTitle)}<c:numFmt formatCode="${xml(chart.yValueFormat || chart.yNumberFormat || formatCode)}" sourceLinked="0"/><c:tickLblPos val="nextTo"/><c:crossAx val="123456"/><c:crosses val="autoZero"/></c:valAx>` : `<c:catAx><c:axId val="123456"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:axPos val="b"/>${chartAxisTitle(chart.categoryAxisTitle || chart.xAxisTitle)}<c:tickLblPos val="nextTo"/><c:crossAx val="654321"/><c:crosses val="autoZero"/></c:catAx><c:valAx><c:axId val="654321"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:axPos val="l"/>${chart.showGridLines === false ? "" : "<c:majorGridlines/>"}${chartAxisTitle(chart.valueAxisTitle || chart.yAxisTitle)}<c:numFmt formatCode="${formatCode}" sourceLinked="0"/><c:tickLblPos val="nextTo"/><c:crossAx val="123456"/><c:crosses val="autoZero"/></c:valAx>`;
+  const chartBody = isCombo
+    ? `<c:barChart><c:barDir val="${chart.barDirection === "horizontal" ? "bar" : "col"}"/><c:grouping val="clustered"/>${chartSeriesXml(chart, categories, comboGroups.columnSeries, { workbookRefs: useExternalWorkbook })}${axes}</c:barChart><c:lineChart><c:grouping val="standard"/>${chartSeriesXml(chart, categories, comboGroups.lineSeries, { workbookRefs: useExternalWorkbook })}${axes}</c:lineChart>`
+    : "<" + chartTag + ">" + grouping + series + axes + "</" + chartTag + ">";
+  const externalData = useExternalWorkbook ? `<c:externalData r:id="rWorkbook"><c:autoUpdate val="0"/></c:externalData>` : "";
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><c:date1904 val="0"/><c:lang val="en-US"/>${externalData}<c:chart>${title}<c:plotArea><c:layout/>${chartBody}${axisXml}</c:plotArea><c:legend><c:legendPos val="${chartLegendPosition(chart.legendPosition)}"/><c:layout/></c:legend><c:plotVisOnly val="1"/></c:chart><c:printSettings><c:headerFooter/><c:pageMargins b="0.75" l="0.7" r="0.7" t="0.75" header="0.3" footer="0.3"/><c:pageSetup/></c:printSettings></c:chartSpace>`;
+}
+
+function generatedChartFrame(id, relId, chart = {}, index = 0) {
+  const x = emu(chart.left, 70);
+  const y = emu(chart.top, 170 + index * 20);
+  const cx = emu(chart.width, 560);
+  const cy = emu(chart.height, 260);
+  return `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${id}" name="${xml(chart.title || `Chart ${index + 1}`)}"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="${relId}"/></a:graphicData></a:graphic></p:graphicFrame>`;
+}
+
+const MAX_EMBEDDED_IMAGE_BYTES = Number(process.env.GENERATED_OFFICE_MAX_IMAGE_BYTES || 8 * 1024 * 1024);
+const EMBEDDED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"]);
+
+function embeddedImageBytes(image = {}) {
+  if (!image?.base64 || typeof image.base64 !== "string") return null;
+  const type = String(image.type || "image/png").split(";", 1)[0].trim().toLowerCase();
+  if (!EMBEDDED_IMAGE_TYPES.has(type)) throw new Error(`Unsupported embedded image type: ${type || "unknown"}.`);
+  const encoded = image.base64.replace(/^data:[^,]+,/, "");
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded) || encoded.length % 4 === 1) throw new Error("Embedded image content is not valid base64.");
+  const bytes = Buffer.from(encoded, "base64");
+  if (!bytes.length || bytes.length > MAX_EMBEDDED_IMAGE_BYTES) throw new Error("Embedded image exceeds the configured size limit.");
+  const signature = type === "image/png"
+    ? bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    : type === "image/jpeg"
+      ? bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+      : type === "image/gif"
+        ? bytes.length >= 6 && ["GIF87a", "GIF89a"].includes(bytes.subarray(0, 6).toString("ascii"))
+        : type === "image/bmp"
+          ? bytes.length >= 2 && bytes.subarray(0, 2).toString("ascii") === "BM"
+          : bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
+  if (!signature) throw new Error("Embedded image content does not match its declared type.");
+  return bytes;
+}
+function imageExt(type = "image/png") {
+  if (type.includes("jpeg") || type.includes("jpg")) return "jpg";
+  if (type.includes("gif")) return "gif";
+  if (type.includes("webp")) return "webp";
+  if (type.includes("bmp")) return "bmp";
+  return "png";
+}
+
+function imageContentType(ext) {
+  return ext === "jpg" ? "image/jpeg" : `image/${ext}`;
+}
+
+function ratioFromImage(image = {}) {
+  const width = asNumber(image.pixelWidth ?? image.naturalWidth ?? image.sourceWidth, 0);
+  const height = asNumber(image.pixelHeight ?? image.naturalHeight ?? image.sourceHeight, 0);
+  return width > 0 && height > 0 ? width / height : 0;
+}
+
+function pct100k(value, fallback = 0) {
+  const numeric = asNumber(value, fallback);
+  if (!Number.isFinite(numeric)) return 0;
+  if (Math.abs(numeric) <= 1) return Math.round(Math.max(0, Math.min(1, numeric)) * 100000);
+  return Math.round(Math.max(0, Math.min(100, numeric)) * 1000);
+}
+
+function pictureCropXml(image = {}, frameRatio = 0) {
+  const crop = image.crop && typeof image.crop === "object" ? image.crop : {};
+  const explicit = ["left", "right", "top", "bottom"].some((key) => crop[key] !== undefined || image[`crop${key[0].toUpperCase()}${key.slice(1)}`] !== undefined);
+  if (explicit) {
+    const l = pct100k(crop.left ?? image.cropLeft);
+    const r = pct100k(crop.right ?? image.cropRight);
+    const t = pct100k(crop.top ?? image.cropTop);
+    const b = pct100k(crop.bottom ?? image.cropBottom);
+    return `<a:srcRect l="${l}" r="${r}" t="${t}" b="${b}"/>`;
+  }
+  const mode = String(image.fit || image.sizing || image.mode || "stretch").toLowerCase();
+  const sourceRatio = ratioFromImage(image);
+  if (!(mode === "fill" || mode === "cover") || !sourceRatio || !frameRatio) return "";
+  if (sourceRatio > frameRatio) {
+    const cropEachSide = Math.round(((sourceRatio - frameRatio) / sourceRatio / 2) * 100000);
+    return `<a:srcRect l="${cropEachSide}" r="${cropEachSide}"/>`;
+  }
+  if (sourceRatio < frameRatio) {
+    const cropTopBottom = Math.round(((frameRatio - sourceRatio) / frameRatio / 2) * 100000);
+    return `<a:srcRect t="${cropTopBottom}" b="${cropTopBottom}"/>`;
+  }
+  return "";
+}
+
+function pictureFrame(image = {}, index = 0) {
+  const left = asNumber(image.left, 390);
+  const top = asNumber(image.top, 130 + index * 170);
+  let width = asNumber(image.width, 260);
+  let height = asNumber(image.height, 150);
+  let x = left;
+  let y = top;
+  const mode = String(image.fit || image.sizing || image.mode || "stretch").toLowerCase();
+  const sourceRatio = ratioFromImage(image);
+  const frameRatio = width > 0 && height > 0 ? width / height : 0;
+  if ((mode === "fit" || mode === "contain") && sourceRatio && frameRatio) {
+    if (sourceRatio > frameRatio) {
+      const fittedHeight = width / sourceRatio;
+      y += (height - fittedHeight) / 2;
+      height = fittedHeight;
+    } else if (sourceRatio < frameRatio) {
+      const fittedWidth = height * sourceRatio;
+      x += (width - fittedWidth) / 2;
+      width = fittedWidth;
+    }
+  }
+  return { x: emu(x, 390), y: emu(y, 130 + index * 170), cx: emu(width, 260), cy: emu(height, 150), frameRatio };
+}
+
+function picture(id, relId, image, index) {
+  const { x, y, cx, cy, frameRatio } = pictureFrame(image, index);
+  const name = xml(image.altText || image.name || `Image ${index + 1}`);
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="${name}" descr="${name}"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relId}"/>${pictureCropXml(image, frameRatio)}<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
+}
+
+function imageBytes(image) {
+  if (!image?.base64) return null;
+  return embeddedImageBytes(image);
+}
+
+function normalizeGeneratedImages(value) {
+  return Array.isArray(value) ? value.filter((image) => image && typeof image === "object" && image.base64).slice(0, 50) : [];
+}
+
+async function resolveImageUrls(images = []) {
+  const resolved = [];
+  for (const image of Array.isArray(images) ? images : []) {
+    if (!image || typeof image !== "object") continue;
+    if (image.base64 || !image.imageUrl) {
+      resolved.push(image);
+      continue;
+    }
+    const asset = await fetchImageAsset(String(image.imageUrl));
+    resolved.push({ ...image, name: image.name || asset.name, type: image.type || asset.type, pixelWidth: image.pixelWidth || asset.pixelWidth, pixelHeight: image.pixelHeight || asset.pixelHeight, base64: asset.base64, altText: image.altText || asset.name });
+  }
+  return resolved;
+}
+
+async function resolveGeneratedPayloadAssets(payload = {}, kind = "") {
+  if (!payload || typeof payload !== "object") return payload;
+  if (kind === "pptx") {
+    const slides = Array.isArray(payload.slides) ? [] : payload.slides;
+    if (Array.isArray(payload.slides)) {
+      for (const slide of payload.slides) slides.push(slide && typeof slide === "object" ? { ...slide, images: await resolveImageUrls(slide.images) } : slide);
+      return { ...payload, slides };
+    }
+  }
+  if (kind === "docx") {
+    const sections = Array.isArray(payload.sections) ? [] : payload.sections;
+    if (Array.isArray(payload.sections)) {
+      for (const section of payload.sections) sections.push(section && typeof section === "object" ? { ...section, images: await resolveImageUrls(section.images) } : section);
+    }
+    return { ...payload, images: await resolveImageUrls(payload.images), ...(Array.isArray(payload.sections) ? { sections } : {}) };
+  }
+  if (kind === "xlsx") {
+    const sheets = Array.isArray(payload.sheets) ? [] : payload.sheets;
+    if (Array.isArray(payload.sheets)) {
+      for (const sheet of payload.sheets) sheets.push(sheet && typeof sheet === "object" ? { ...sheet, images: await resolveImageUrls(sheet.images) } : sheet);
+      return { ...payload, sheets };
+    }
+    return { ...payload, images: await resolveImageUrls(payload.images) };
+  }
+  return payload;
+}
+
+function slideXml(slide, slideIndex, imageRels, chartRels = [], hyperlinkRels = []) {
+  const title = slide.title || `Slide ${slideIndex + 1}`;
+  const body = slide.body || slide.content || "";
+  let nextId = 2;
+  const shapes = [
+    textBox(nextId++, "Title", title, emu(42, 42), emu(28, 28), emu(650, 650), emu(58, 58), 3200, true),
+    bodyBox(nextId++, "Body", body, emu(52, 52), emu(105, 105), emu(560, 560), emu(360, 360)),
+    generatedSlideObjects(nextId, slide, imageRels, chartRels, hyperlinkRels),
+  ].join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld>${slideBackground(slide)}<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>${shapes}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
+}
+
+function templateSlideXml(slide, slideIndex, layoutXml = "", imageRels = [], chartRels = [], hyperlinkRels = []) {
+  const placeholders = placeholderShapesFromLayout(layoutXml);
+  if (!placeholders.length) return slideXml(slide, slideIndex, imageRels, chartRels, hyperlinkRels);
+  const used = new Set();
+  const title = slide.title || `Slide ${slideIndex + 1}`;
+  const body = slide.body || slide.content || "";
+  const subtitle = slide.subtitle || slide.kicker || "";
+  const renderedPlaceholders = placeholders.map((placeholder) => {
+    let text = "";
+    if (placeholder.kind === "title") text = title;
+    else if (placeholder.kind === "subtitle") text = subtitle || body;
+    else if (placeholder.kind === "body") text = body;
+    else text = "";
+    if (text) used.add(placeholder.kind);
+    return replaceShapeText(placeholder.xml, text);
+  }).join("");
+  const highestPlaceholderId = Math.max(501, ...placeholders.map((placeholder) => placeholder.id || 0));
+  const generatedTitleId = highestPlaceholderId + 1;
+  const generatedBodyId = highestPlaceholderId + 2;
+  const fallbackTitle = used.has("title") ? "" : textBox(generatedTitleId, "Generated Title", title, emu(42, 42), emu(28, 28), emu(650, 650), emu(58, 58), 3200, true);
+  const fallbackBody = body && !used.has("body") && !used.has("subtitle") ? bodyBox(generatedBodyId, "Generated Body", body, emu(52, 52), emu(105, 105), emu(560, 560), emu(360, 360)) : "";
+  const extraObjects = generatedSlideObjects(highestPlaceholderId + 3, slide, imageRels, chartRels, hyperlinkRels);
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld>${slideBackground(slide)}<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>${renderedPlaceholders}${fallbackTitle}${fallbackBody}${extraObjects}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
+}
+
+function notesXml(notes = "") {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>${bodyBox(2, "Notes", notes, 0, 0, SLIDE_W, SLIDE_H)}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>`;
+}
+
+function rels(rels) {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels.map((rel) => `<Relationship Id="${rel.id}" Type="${rel.type}" Target="${xml(rel.target)}"${rel.targetMode ? ` TargetMode="${xml(rel.targetMode)}"` : ""}/>`).join("")}</Relationships>`;
+}
+
+function contentTypes(slideCount, noteCount, imageExts, chartCount = 0) {
+  const defaults = new Set(["xml", "rels", ...imageExts]);
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">${[...defaults].map((ext) => `<Default Extension="${ext}" ContentType="${ext === "rels" ? "application/vnd.openxmlformats-package.relationships+xml" : ext === "xml" ? "application/xml" : imageContentType(ext)}"/>`).join("")}<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>${Array.from({ length: slideCount }, (_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join("")}${Array.from({ length: noteCount }, (_, i) => `<Override PartName="/ppt/notesSlides/notesSlide${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"/>`).join("")}${Array.from({ length: chartCount }, (_, i) => `<Override PartName="/ppt/charts/chart${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`).join("")}</Types>`;
+}
+
+const ROOT_RELS = rels([{ id: "rId1", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument", target: "ppt/presentation.xml" }]);
+function generatedTheme(brand = DEFAULT_BRAND) {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="CTRL Generated"><a:themeElements><a:clrScheme name="CTRL"><a:dk1><a:srgbClr val="${brand.dark}"/></a:dk1><a:lt1><a:srgbClr val="${brand.light}"/></a:lt1><a:accent1><a:srgbClr val="${brand.accent1}"/></a:accent1><a:accent2><a:srgbClr val="${brand.accent2}"/></a:accent2><a:accent3><a:srgbClr val="${brand.accent3}"/></a:accent3></a:clrScheme><a:fontScheme name="CTRL"><a:majorFont><a:latin typeface="${xml(brand.majorFont)}"/></a:majorFont><a:minorFont><a:latin typeface="${xml(brand.minorFont)}"/></a:minorFont></a:fontScheme><a:fmtScheme name="Office"><a:fillStyleLst/><a:lnStyleLst/><a:effectStyleLst/><a:bgFillStyleLst/></a:fmtScheme></a:themeElements></a:theme>`;
+}
+const SLIDE_MASTER = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld><p:sldLayoutIdLst><p:sldLayoutId id="1" r:id="rId1"/></p:sldLayoutIdLst><p:txStyles/></p:sldMaster>`;
+const SLIDE_LAYOUT = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="blank" preserve="1"><p:cSld name="Blank"><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>`;
+
+export function createGeneratedPptx(payload = {}) {
+  const templatePreserved = createTemplatePreservingPptx(payload);
+  if (templatePreserved) return templatePreserved;
+
+  const rawSlides = Array.isArray(payload.slides) && payload.slides.length ? payload.slides.slice(0, 100) : [{ title: payload.title || "Generated deck", body: "" }];
+  const slides = rawSlides.map((slide, index) => deckChromeSlide(slide, payload, index, rawSlides.length));
+  const brand = normalizedBrandProfile(payload);
+  const entries = [];
+  const imageExts = new Set();
+  let mediaIndex = 1;
+  let noteCount = 0;
+  let chartIndex = 1;
+  let embeddedWorkbookIndex = 1;
+
+  const presentationRels = [
+    { id: "rId1", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster", target: "slideMasters/slideMaster1.xml" },
+    { id: "rTheme", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme", target: "theme/theme1.xml" },
+  ];
+
+  entries.push(["_rels/.rels", ROOT_RELS]);
+  entries.push(["ppt/theme/theme1.xml", generatedTheme(brand)]);
+  entries.push(["ppt/slideMasters/slideMaster1.xml", SLIDE_MASTER]);
+  entries.push(["ppt/slideMasters/_rels/slideMaster1.xml.rels", rels([
+    { id: "rId1", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout", target: "../slideLayouts/slideLayout1.xml" },
+    { id: "rId2", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme", target: "../theme/theme1.xml" },
+  ])]);
+  entries.push(["ppt/slideLayouts/slideLayout1.xml", SLIDE_LAYOUT]);
+  entries.push(["ppt/slideLayouts/_rels/slideLayout1.xml.rels", rels([{ id: "rId1", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster", target: "../slideMasters/slideMaster1.xml" }])]);
+
+  for (const [index, slide] of slides.entries()) {
+    const slideNumber = index + 1;
+    const slideRels = [{ id: "rLayout", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout", target: "../slideLayouts/slideLayout1.xml" }];
+    const imageRels = [];
+    const chartRels = [];
+    const hyperlinkRels = [];
+    const images = Array.isArray(slide.images) ? slide.images.slice(0, 8) : [];
+    for (const image of images) {
+      if (!image?.base64) continue;
+      const ext = imageExt(image.type);
+      imageExts.add(ext);
+      const mediaName = `image${mediaIndex++}.${ext}`;
+      const relId = `rImg${mediaIndex}`;
+      entries.push([`ppt/media/${mediaName}`, embeddedImageBytes(image)]);
+      slideRels.push({ id: relId, type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image", target: `../media/${mediaName}` });
+      imageRels.push({ relId, image: { ...image, name: image.name || mediaName } });
+    }
+    const charts = Array.isArray(slide.charts) ? slide.charts.slice(0, 6) : [];
+    for (const chart of charts) {
+      if (!chart || typeof chart !== "object") continue;
+      const styledChart = brandChart(chart, slide.__brand);
+      const chartNumber = chartIndex++;
+      const workbookName = `chartData${embeddedWorkbookIndex++}.xlsx`;
+      const relId = `rChart${chartNumber}`;
+      entries.push([`ppt/charts/chart${chartNumber}.xml`, chartXml(styledChart, { externalWorkbook: true })]);
+      entries.push([`ppt/charts/_rels/chart${chartNumber}.xml.rels`, chartRelsXml(workbookName)]);
+      entries.push([`ppt/embeddings/${workbookName}`, embeddedChartWorkbook(styledChart)]);
+      slideRels.push({ id: relId, type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart", target: `../charts/chart${chartNumber}.xml` });
+      chartRels.push({ relId, chart: styledChart });
+    }
+    const links = Array.isArray(slide.links) ? slide.links.slice(0, 12) : [];
+    for (const link of links) {
+      if (!link || typeof link !== "object" || !link.url) continue;
+      const relId = `rLink${hyperlinkRels.length + 1}`;
+      slideRels.push({ id: relId, type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", target: String(link.url), targetMode: "External" });
+      hyperlinkRels.push({ relId, link });
+    }
+    if (slide.notes) {
+      noteCount += 1;
+      entries.push([`ppt/notesSlides/notesSlide${slideNumber}.xml`, notesXml(slide.notes)]);
+      slideRels.push({ id: "rNotes", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide", target: `../notesSlides/notesSlide${slideNumber}.xml` });
+    }
+    entries.push([`ppt/slides/slide${slideNumber}.xml`, slideXml(slide, index, imageRels, chartRels, hyperlinkRels)]);
+    entries.push([`ppt/slides/_rels/slide${slideNumber}.xml.rels`, rels(slideRels)]);
+    presentationRels.push({ id: `rSlide${slideNumber}`, type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide", target: `slides/slide${slideNumber}.xml` });
+  }
+
+  const sldIdLst = slides.map((_slide, index) => `<p:sldId id="${256 + index}" r:id="rSlide${index + 1}"/>`).join("");
+  const presentation = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst>${sldIdLst}</p:sldIdLst><p:sldSz cx="${SLIDE_W}" cy="${SLIDE_H}" type="wide"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>`;
+  entries.push(["ppt/presentation.xml", presentation]);
+  entries.push(["ppt/_rels/presentation.xml.rels", rels(presentationRels)]);
+  const types = contentTypes(slides.length, noteCount, imageExts, chartIndex - 1).replace("</Types>", `${Array.from({ length: embeddedWorkbookIndex - 1 }, (_unused, index) => `<Override PartName="/ppt/embeddings/chartData${index + 1}.xlsx" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/>`).join("")}</Types>`);
+  entries.unshift(["[Content_Types].xml", types]);
+  return zip(entries);
+}
+
+
+function wordParagraph(text = "", styleId = "") {
+  const style = styleId ? `<w:pPr><w:pStyle w:val="${xml(styleId)}"/></w:pPr>` : "";
+  return `<w:p>${style}<w:r><w:t xml:space="preserve">${xml(text)}</w:t></w:r></w:p>`;
+}
+
+function safeBookmarkName(value = "") {
+  const cleaned = String(value || "").replace(/[^A-Za-z0-9_]/g, "_").replace(/^([^A-Za-z_])/, "_$1").slice(0, 40);
+  return cleaned || "CTRL_REF";
+}
+
+function wordCaptionParagraph(caption = {}, bookmarkId = 1, sequenceNumber = 1) {
+  const label = xml(caption.label || caption.type || "Figure");
+  const text = xml(caption.text || caption.caption || "");
+  const bookmark = safeBookmarkName(caption.bookmark || caption.id || `${label}_${bookmarkId}`);
+  const suffix = text ? `: ${text}` : "";
+  return `<w:p><w:pPr><w:pStyle w:val="Caption"/></w:pPr><w:bookmarkStart w:id="${bookmarkId}" w:name="${xml(bookmark)}"/><w:r><w:t xml:space="preserve">${label} </w:t></w:r><w:fldSimple w:instr="SEQ ${label} \\* ARABIC"><w:r><w:t>${sequenceNumber}</w:t></w:r></w:fldSimple><w:r><w:t xml:space="preserve">${suffix}</w:t></w:r><w:bookmarkEnd w:id="${bookmarkId}"/></w:p>`;
+}
+
+function wordCrossReferenceParagraph(reference = {}) {
+  const bookmark = safeBookmarkName(reference.bookmark || reference.id || reference.target || "");
+  const prefix = reference.text || reference.label || "See";
+  const fallback = reference.fallback || reference.caption || bookmark;
+  return `<w:p><w:r><w:t xml:space="preserve">${xml(prefix)} </w:t></w:r><w:fldSimple w:instr="REF ${xml(bookmark)} \\h"><w:r><w:t xml:space="preserve">${xml(fallback)}</w:t></w:r></w:fldSimple></w:p>`;
+}
+
+function wordListParagraph(text = "", numId = 1, level = 0) {
+  const ilvl = Math.max(0, Math.min(8, Math.round(asNumber(level, 0))));
+  return `<w:p><w:pPr><w:numPr><w:ilvl w:val="${ilvl}"/><w:numId w:val="${numId}"/></w:numPr></w:pPr><w:r><w:t xml:space="preserve">${xml(text)}</w:t></w:r></w:p>`;
+}
+
+function wordListItems(items = [], type = "bullet") {
+  if (!Array.isArray(items)) return "";
+  const numId = type === "number" || type === "numbered" || type === "ordered" ? 2 : 1;
+  return items.map((item) => {
+    if (item && typeof item === "object") return wordListParagraph(item.text || item.value || "", numId, item.level || 0);
+    return wordListParagraph(item, numId, 0);
+  }).join("");
+}
+
+function wordHyperlinkParagraph(relId, link = {}) {
+  const text = link.text || link.label || link.url || "Link";
+  return `<w:p><w:hyperlink r:id="${relId}" w:history="1"><w:r><w:rPr><w:rStyle w:val="Hyperlink"/><w:u w:val="single"/><w:color w:val="0563C1"/></w:rPr><w:t xml:space="preserve">${xml(text)}</w:t></w:r></w:hyperlink></w:p>`;
+}
+
+function wordTableOfContents() {
+  return `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Table of contents</w:t></w:r></w:p><w:p><w:fldSimple w:instr="TOC \\o &quot;1-3&quot; \\h \\z \\u"><w:r><w:t>Right-click and update field in Word to refresh this table of contents.</w:t></w:r></w:fldSimple></w:p>`;
+}
+
+function wordFootnoteReference(id) {
+  return `<w:r><w:footnoteReference w:id="${id}"/></w:r>`;
+}
+
+function wordEndnoteReference(id) {
+  return `<w:r><w:endnoteReference w:id="${id}"/></w:r>`;
+}
+
+function wordParagraphWithEndnote(text = "", endnoteId = null, styleId = "") {
+  const style = styleId ? `<w:pPr><w:pStyle w:val="${xml(styleId)}"/></w:pPr>` : "";
+  return `<w:p>${style}<w:r><w:t xml:space="preserve">${xml(text)}</w:t></w:r>${endnoteId ? wordEndnoteReference(endnoteId) : ""}</w:p>`;
+}
+
+function wordRevisionRun(revision = {}, index = 0) {
+  const type = revision.type === "delete" || revision.type === "deleted" || revision.type === "deletion" ? "del" : "ins";
+  const tag = type === "del" ? "w:del" : "w:ins";
+  const runTag = type === "del" ? "w:delText" : "w:t";
+  const author = xml(revision.author || "CTRL AI");
+  const date = xml(revision.date || new Date(0).toISOString());
+  const text = xml(revision.text || revision.value || "");
+  return `<${tag} w:id="${index + 1}" w:author="${author}" w:date="${date}"><w:r><${runTag} xml:space="preserve">${text}</${runTag}></w:r></${tag}>`;
+}
+
+function wordRevisionParagraph(revisions = []) {
+  const normalized = Array.isArray(revisions) ? revisions.filter((revision) => revision && typeof revision === "object" && (revision.text || revision.value)) : [];
+  if (!normalized.length) return "";
+  return `<w:p>${normalized.map((revision, index) => wordRevisionRun(revision, index)).join("")}</w:p>`;
+}
+
+function wordParagraphWithFootnote(text = "", footnoteId = null, styleId = "") {
+  const style = styleId ? `<w:pPr><w:pStyle w:val="${xml(styleId)}"/></w:pPr>` : "";
+  return `<w:p>${style}<w:r><w:t xml:space="preserve">${xml(text)}</w:t></w:r>${footnoteId ? wordFootnoteReference(footnoteId) : ""}</w:p>`;
+}
+
+function wordTable(rows = []) {
+  const normalized = rows.map((row) => Array.isArray(row) ? row : [row]);
+  if (!normalized.length) return "";
+  const width = Math.floor(9000 / Math.max(1, ...normalized.map((row) => row.length)));
+  return `<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/><w:tblLook w:val="04A0"/></w:tblPr><w:tblGrid>${Array.from({ length: Math.max(1, ...normalized.map((row) => row.length)) }, () => `<w:gridCol w:w="${width}"/>`).join("")}</w:tblGrid>${normalized.map((row) => `<w:tr>${row.map((cell) => `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/></w:tcPr>${wordParagraph(String(cell ?? ""))}</w:tc>`).join("")}</w:tr>`).join("")}</w:tbl>`;
+}
+
+function wordImageParagraph(relId, image = {}, index = 1) {
+  const cx = emu(image.width, 420);
+  const cy = emu(image.height, 240);
+  const name = xml(image.altText || image.name || `Image ${index}`);
+  return `<w:p><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${index}" name="${name}" descr="${name}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"/></wp:cNvGraphicFramePr><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${index}" name="${name}" descr="${name}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${relId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+}
+
+function docxStyles() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/><w:sz w:val="22"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="44"/><w:color w:val="1F4E79"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="2563EB"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="26"/><w:color w:val="374151"/></w:rPr></w:style><w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr></w:style></w:styles>`;
+}
+
+
+function docxHeader(text = "") {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${wordParagraph(text)}</w:hdr>`;
+}
+
+function docxFooter(text = "") {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${wordParagraph(text)}</w:ftr>`;
+}
+
+function docxComments(comments = []) {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${comments.map((comment, index) => `<w:comment w:id="${index}" w:author="${xml(comment.author || "CTRL AI")}" w:date="${xml(comment.date || new Date(0).toISOString())}">${wordParagraph(comment.text || comment)}</w:comment>`).join("")}</w:comments>`;
+}
+
+function docxFootnotes(footnotes = []) {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>${footnotes.map((footnote, index) => `<w:footnote w:id="${index + 1}">${wordParagraph(footnote.text || footnote)}</w:footnote>`).join("")}</w:footnotes>`;
+}
+
+function docxEndnotes(endnotes = []) {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:endnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:endnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:endnote><w:endnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:endnote>${endnotes.map((endnote, index) => `<w:endnote w:id="${index + 1}">${wordParagraph(endnote.text || endnote)}</w:endnote>`).join("")}</w:endnotes>`;
+}
+
+function docxNumbering() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="&#8226;"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl><w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="?"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="1440" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum><w:abstractNum w:abstractNumId="2"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl><w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/><w:lvlText w:val="%2."/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="1440" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num><w:num w:numId="2"><w:abstractNumId w:val="2"/></w:num></w:numbering>`;
+}
+
+function docxSettings(trackRevisions = false) {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${trackRevisions ? "<w:trackRevisions/>" : ""}</w:settings>`;
+}
+
+function normalizedColumns(columns) {
+  if (typeof columns === "number") return { count: columns };
+  return columns && typeof columns === "object" ? columns : {};
+}
+
+function docxColumns(payload = {}) {
+  const columns = normalizedColumns(payload.columns || payload.page?.columns);
+  const count = Math.max(1, Math.min(8, Math.round(asNumber(columns.count || columns.num, 1))));
+  if (count <= 1 && !columns.separator && !columns.space) return "";
+  const space = Math.max(0, Math.round(asNumber(columns.space, 720)));
+  return `<w:cols w:num="${count}" w:space="${space}"${columns.separator ? ' w:sep="1"' : ""}/>`;
+}
+
+function sectionLayoutPayload(defaultPayload = {}, section = {}) {
+  return {
+    ...defaultPayload,
+    page: { ...(defaultPayload.page || {}), ...(section.page || {}) },
+    columns: section.columns ?? section.page?.columns ?? defaultPayload.columns ?? defaultPayload.page?.columns,
+  };
+}
+
+function hasSectionLayout(section = {}) {
+  return Boolean(section && typeof section === "object" && (section.page || section.columns || section.page?.columns));
+}
+
+function wordSectionBreak(payload = {}, sectRefs = "") {
+  return `<w:p><w:pPr>${docxSectPr(payload, sectRefs)}</w:pPr></w:p>`;
+}
+
+function docxSectPr(payload = {}, sectRefs = "") {
+  const layout = payload.page || {};
+  const orientation = layout.orientation === "landscape" ? "landscape" : "portrait";
+  const width = orientation === "landscape" ? 15840 : 12240;
+  const height = orientation === "landscape" ? 12240 : 15840;
+  const margins = layout.margins || {};
+  const margin = (name, fallback) => Math.max(0, Math.round(asNumber(margins[name], fallback)));
+  return `<w:sectPr>${sectRefs}<w:pgSz w:w="${width}" w:h="${height}"${orientation === "landscape" ? ' w:orient="landscape"' : ""}/><w:pgMar w:top="${margin("top", 1440)}" w:right="${margin("right", 1440)}" w:bottom="${margin("bottom", 1440)}" w:left="${margin("left", 1440)}"/>${docxColumns(payload)}</w:sectPr>`;
+}
+
+export function createGeneratedDocx(payload = {}) {
+  const templateEntries = decodeDocxTemplate(payload.templateBase64);
+  const entries = [];
+  const title = payload.title || "Generated document";
+  const sections = Array.isArray(payload.sections) && payload.sections.length ? payload.sections : [{ heading: title, body: payload.body || "" }];
+  const comments = Array.isArray(payload.comments) ? payload.comments.slice(0, 100) : [];
+  const footnotes = Array.isArray(payload.footnotes) ? payload.footnotes.slice(0, 100) : [];
+  const endnotes = Array.isArray(payload.endnotes) ? payload.endnotes.slice(0, 100) : [];
+  const revisions = Array.isArray(payload.revisions) ? payload.revisions.slice(0, 200) : [];
+  const hasLists = Array.isArray(payload.bullets) || Array.isArray(payload.numberedList) || sections.some((section) => Array.isArray(section.bullets) || Array.isArray(section.numberedList));
+  const headerText = typeof payload.header === "string" ? payload.header : "";
+  const footerText = typeof payload.footer === "string" ? payload.footer : "";
+  const docRels = [];
+  const imageExts = new Set();
+  let mediaIndex = templateEntries ? [...templateEntries.keys()].filter((name) => /^word\/media\//.test(name)).length + 1 : 1;
+  let relIndex = 1;
+  let bookmarkIndex = 1;
+  const captionCounters = new Map();
+  const bodyParts = [wordParagraph(title, "Title")];
+  const addCaption = (caption) => {
+    if (!caption || typeof caption !== "object") return;
+    const label = caption.label || caption.type || "Figure";
+    const next = (captionCounters.get(label) || 0) + 1;
+    captionCounters.set(label, next);
+    bodyParts.push(wordCaptionParagraph(caption, bookmarkIndex++, next));
+  };
+  const addCrossReference = (reference) => {
+    if (!reference || typeof reference !== "object") return;
+    bodyParts.push(wordCrossReferenceParagraph(reference));
+  };
+  const addWordHyperlink = (link) => {
+    if (!link || typeof link !== "object" || !link.url) return;
+    const relId = `rCtrlLink${relIndex++}`;
+    docRels.push({ id: relId, type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", target: String(link.url), targetMode: "External" });
+    bodyParts.push(wordHyperlinkParagraph(relId, link));
+  };
+  if (payload.tableOfContents) bodyParts.push(wordTableOfContents());
+  if (revisions.length) bodyParts.push(wordRevisionParagraph(revisions));
+  if (Array.isArray(payload.bullets)) bodyParts.push(wordListItems(payload.bullets, "bullet"));
+  if (Array.isArray(payload.numberedList)) bodyParts.push(wordListItems(payload.numberedList, "number"));
+
+  const addWordImage = (image) => {
+    const bytes = imageBytes(image);
+    if (!bytes) return;
+    const ext = imageExt(image.type);
+    imageExts.add(ext);
+    const mediaName = `image${mediaIndex++}.${ext}`;
+    const relId = `rCtrlImage${relIndex++}`;
+    entries.push([`word/media/${mediaName}`, bytes]);
+    docRels.push({ id: relId, type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image", target: `media/${mediaName}` });
+    bodyParts.push(wordImageParagraph(relId, { ...image, name: image.name || mediaName }, mediaIndex));
+    addCaption(image.caption);
+  };
+
+  if (Array.isArray(payload.links)) payload.links.slice(0, 100).forEach(addWordHyperlink);
+  for (const image of normalizeGeneratedImages(payload.images)) addWordImage(image);
+  if (Array.isArray(payload.captions)) payload.captions.slice(0, 100).forEach(addCaption);
+  if (Array.isArray(payload.crossReferences)) payload.crossReferences.slice(0, 100).forEach(addCrossReference);
+  for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
+    const section = sections[sectionIndex];
+    if (section.heading) bodyParts.push(wordParagraph(section.heading, section.level === 2 ? "Heading2" : "Heading1"));
+    if (section.body) String(section.body).split(/\n\s*\n/).forEach((para) => bodyParts.push(wordParagraph(para)));
+    if (Array.isArray(section.revisions)) bodyParts.push(wordRevisionParagraph(section.revisions));
+    if (section.footnote) {
+      const footnoteId = footnotes.length + 1;
+      footnotes.push({ text: section.footnote });
+      bodyParts.push(wordParagraphWithFootnote("Source note", footnoteId));
+    }
+    if (section.endnote) {
+      const endnoteId = endnotes.length + 1;
+      endnotes.push({ text: section.endnote });
+      bodyParts.push(wordParagraphWithEndnote("Endnote", endnoteId));
+    }
+    if (Array.isArray(section.bullets)) bodyParts.push(wordListItems(section.bullets, "bullet"));
+    if (Array.isArray(section.numberedList)) bodyParts.push(wordListItems(section.numberedList, "number"));
+    if (Array.isArray(section.links)) section.links.slice(0, 50).forEach(addWordHyperlink);
+    if (Array.isArray(section.crossReferences)) section.crossReferences.slice(0, 50).forEach(addCrossReference);
+    if (Array.isArray(section.table)) {
+      bodyParts.push(wordTable(section.table));
+      addCaption(section.tableCaption || section.caption);
+    }
+    for (const image of normalizeGeneratedImages(section.images)) addWordImage(image);
+    if (sectionIndex < sections.length - 1 && hasSectionLayout(section)) bodyParts.push(wordSectionBreak(sectionLayoutPayload(payload, section)));
+  }
+  const sectRefs = [
+    headerText ? '<w:headerReference w:type="default" r:id="rCtrlHeader1"/>' : "",
+    footerText ? '<w:footerReference w:type="default" r:id="rCtrlFooter1"/>' : "",
+    !headerText && templateEntries ? templateSectionReferences(templateEntries).match(/<w:headerReference\b[^>]*\/>/g)?.join("") || "" : "",
+    !footerText && templateEntries ? templateSectionReferences(templateEntries).match(/<w:footerReference\b[^>]*\/>/g)?.join("") || "" : "",
+  ].join("");
+  const lastSection = sections[sections.length - 1] || {};
+  const finalLayout = hasSectionLayout(lastSection) ? sectionLayoutPayload(payload, lastSection) : payload;
+  const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${bodyParts.join("")}${docxSectPr(finalLayout, sectRefs)}</w:body></w:document>`;
+  const overrides = [
+    '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>',
+    '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>',
+    hasLists ? '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>' : "",
+    revisions.length ? '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>' : "",
+    headerText ? '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' : "",
+    footerText ? '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' : "",
+    comments.length ? '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' : "",
+    footnotes.length ? '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' : "",
+    endnotes.length ? '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' : "",
+  ].filter(Boolean).join("");
+  const imageDefaults = [...imageExts].map((ext) => `<Default Extension="${ext}" ContentType="${imageContentType(ext)}"/>`).join("");
+  entries.push(["[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${imageDefaults}${overrides}</Types>`]);
+  entries.push(["_rels/.rels", rels([{ id: "rId1", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument", target: "word/document.xml" }])]);
+  if (headerText) docRels.push({ id: "rCtrlHeader1", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header", target: "header1.xml" });
+  if (footerText) docRels.push({ id: "rCtrlFooter1", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer", target: "footer1.xml" });
+  if (comments.length) docRels.push({ id: "rCtrlComments", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments", target: "comments.xml" });
+  if (hasLists) docRels.push({ id: "rCtrlNumbering", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering", target: "numbering.xml" });
+  if (footnotes.length) docRels.push({ id: "rCtrlFootnotes", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes", target: "footnotes.xml" });
+  if (endnotes.length) docRels.push({ id: "rCtrlEndnotes", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes", target: "endnotes.xml" });
+  if (revisions.length) docRels.push({ id: "rCtrlSettings", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings", target: "settings.xml" });
+  entries.push(["word/document.xml", document]);
+  entries.push(["word/styles.xml", docxStyles()]);
+  if (hasLists) entries.push(["word/numbering.xml", docxNumbering()]);
+  if (revisions.length) entries.push(["word/settings.xml", docxSettings(true)]);
+  if (headerText) entries.push(["word/header1.xml", docxHeader(headerText)]);
+  if (footerText) entries.push(["word/footer1.xml", docxFooter(footerText)]);
+  if (comments.length) entries.push(["word/comments.xml", docxComments(comments)]);
+  if (footnotes.length) entries.push(["word/footnotes.xml", docxFootnotes(footnotes)]);
+  if (endnotes.length) entries.push(["word/endnotes.xml", docxEndnotes(endnotes)]);
+  entries.push(["word/_rels/document.xml.rels", rels(docRels)]);
+  if (!templateEntries) return zip(entries);
+
+  const merged = new Map(templateEntries);
+  for (const [name, content] of entries) merged.set(name, content);
+  if (templateEntries.has("word/styles.xml")) merged.set("word/styles.xml", templateEntries.get("word/styles.xml"));
+  if (templateEntries.has("word/numbering.xml") && !hasLists) merged.set("word/numbering.xml", templateEntries.get("word/numbering.xml"));
+  const templateRels = templateEntries.get("word/_rels/document.xml.rels")?.toString("utf8") || "";
+  merged.set("word/_rels/document.xml.rels", mergeDocxRelationships(templateRels, rels(docRels)));
+  merged.set("[Content_Types].xml", mergeDocxContentTypes(templateEntries.get("[Content_Types].xml")?.toString("utf8"), entries.find(([name]) => name === "[Content_Types].xml")?.[1]?.toString?.("utf8")));
+  return zipFromMap(merged);
+}
+
+function columnName(index) {
+  let n = index + 1;
+  let name = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    name = String.fromCharCode(65 + rem) + name;
+    n = Math.floor((n - 1) / 26);
+  }
+  return name;
+}
+
+function cellXml(value, rowIndex, colIndex) {
+  const ref = `${columnName(colIndex)}${rowIndex + 1}`;
+  if (typeof value === "number" && Number.isFinite(value)) return `<c r="${ref}"><v>${value}</v></c>`;
+  if (typeof value === "string" && value.startsWith("=")) return `<c r="${ref}"><f>${xml(value.slice(1))}</f></c>`;
+  return `<c r="${ref}" t="inlineStr"><is><t>${xml(value ?? "")}</t></is></c>`;
+}
+
+function xlsxRowHeightAttrs(options = {}, rowIndex = 0) {
+  const rowNumber = rowIndex + 1;
+  const heights = Array.isArray(options.rowHeights) ? options.rowHeights : Array.isArray(options.rowsMeta) ? options.rowsMeta : [];
+  const match = heights.find((item, index) => {
+    if (typeof item === "number") return index === rowIndex;
+    if (!item || typeof item !== "object") return false;
+    const start = Math.max(1, Number(item.row ?? item.index ?? item.min ?? item.start ?? rowNumber) || rowNumber);
+    const end = Math.max(start, Number(item.max ?? item.end ?? start) || start);
+    return rowNumber >= start && rowNumber <= end;
+  });
+  const height = typeof match === "number" ? match : match?.height ?? match?.size;
+  if (!Number.isFinite(Number(height))) return "";
+  const hidden = match && typeof match === "object" && match.hidden ? ' hidden="1"' : "";
+  return ` ht="${Math.max(0.1, Number(height))}" customHeight="1"${hidden}`;
+}
+
+function xlsxSheetViews(options = {}) {
+  const freeze = options.freeze || options.freezePanes || {};
+  const cell = typeof freeze.cell === "string" ? parseCellAddress(freeze.cell) : null;
+  const xSplit = cell ? cell.col : Math.max(0, Number(freeze.columns || options.freezeColumns || 0) || 0);
+  const ySplit = cell ? cell.row : Math.max(0, Number(freeze.rows || options.freezeRows || 0) || 0);
+  const topLeftCell = xSplit || ySplit ? `${columnName(xSplit)}${ySplit + 1}` : "A1";
+  const activePane = xSplit && ySplit ? "bottomRight" : xSplit ? "topRight" : ySplit ? "bottomLeft" : "topLeft";
+  const pane = xSplit || ySplit ? `<pane${xSplit ? ` xSplit="${xSplit}"` : ""}${ySplit ? ` ySplit="${ySplit}"` : ""} topLeftCell="${topLeftCell}" activePane="${activePane}" state="frozen"/><selection pane="${activePane}" activeCell="${topLeftCell}" sqref="${topLeftCell}"/>` : "";
+  const showGridLines = typeof options.showGridlines === "boolean" ? ` showGridLines="${options.showGridlines ? 1 : 0}"` : "";
+  const showRowColHeaders = typeof options.showHeadings === "boolean" ? ` showRowColHeaders="${options.showHeadings ? 1 : 0}"` : "";
+  const zoomScale = Number.isFinite(Number(options.zoomScale || options.zoom)) ? ` zoomScale="${Math.max(10, Math.min(400, Number(options.zoomScale || options.zoom)))}"` : "";
+  return `<sheetViews><sheetView workbookViewId="0"${showGridLines}${showRowColHeaders}${zoomScale}>${pane}</sheetView></sheetViews>`;
+}
+
+function columnIndexFromValue(value) {
+  if (Number.isFinite(Number(value))) return Math.max(1, Math.trunc(Number(value)));
+  const text = String(value || "A").toUpperCase().replace(/[^A-Z]/g, "") || "A";
+  let index = 0;
+  for (const char of text) index = index * 26 + (char.charCodeAt(0) - 64);
+  return Math.max(1, index || 1);
+}
+
+function xlsxCols(options = {}) {
+  const columns = Array.isArray(options.columns) ? options.columns : Array.isArray(options.columnWidths) ? options.columnWidths : [];
+  const parts = columns.map((column, index) => {
+    if (typeof column === "number") return `<col min="${index + 1}" max="${index + 1}" width="${Math.max(0.1, column)}" customWidth="1"/>`;
+    if (!column || typeof column !== "object") return "";
+    const min = columnIndexFromValue(column.min ?? column.start ?? column.column ?? column.index ?? index + 1);
+    const max = columnIndexFromValue(column.max ?? column.end ?? column.column ?? column.index ?? min);
+    const width = Math.max(0.1, Number(column.width || column.size || 12));
+    const hidden = column.hidden ? ' hidden="1"' : "";
+    return `<col min="${Math.min(min, max)}" max="${Math.max(min, max)}" width="${width}" customWidth="1"${hidden}/>`;
+  }).filter(Boolean).join("");
+  return parts ? `<cols>${parts}</cols>` : "";
+}
+
+function xlsxMergeCells(options = {}) {
+  const merges = (Array.isArray(options.merges) ? options.merges : Array.isArray(options.mergeCells) ? options.mergeCells : []).map((merge) => typeof merge === "string" ? merge : merge?.ref || merge?.range || "").filter(Boolean).slice(0, 500);
+  return merges.length ? `<mergeCells count="${merges.length}">${merges.map((ref) => `<mergeCell ref="${xml(ref)}"/>`).join("")}</mergeCells>` : "";
+}
+
+function xlsxAutoFilter(options = {}) {
+  const ref = typeof options.autoFilter === "string" ? options.autoFilter : typeof options.filter === "string" ? options.filter : options.autoFilter?.ref || options.autoFilter?.range || options.filter?.ref || options.filter?.range || "";
+  return ref ? `<autoFilter ref="${xml(ref)}"/>` : "";
+}
+
+function xlsxPageMargins(options = {}) {
+  const margins = options.margins && typeof options.margins === "object" ? options.margins : {};
+  const left = asNumber(options.leftMargin ?? margins.left, 0.7);
+  const right = asNumber(options.rightMargin ?? margins.right, 0.7);
+  const top = asNumber(options.topMargin ?? margins.top, 0.75);
+  const bottom = asNumber(options.bottomMargin ?? margins.bottom, 0.75);
+  const header = asNumber(options.headerMargin ?? margins.header, 0.3);
+  const footer = asNumber(options.footerMargin ?? margins.footer, 0.3);
+  return `<pageMargins left="${left}" right="${right}" top="${top}" bottom="${bottom}" header="${header}" footer="${footer}"/>`;
+}
+
+function xlsxPrintOptions(options = {}) {
+  const attrs = [];
+  if (typeof options.showGridlines === "boolean") attrs.push(`gridLines="${options.showGridlines ? 1 : 0}"`);
+  if (typeof options.showHeadings === "boolean") attrs.push(`headings="${options.showHeadings ? 1 : 0}"`);
+  if (typeof options.centerHorizontally === "boolean") attrs.push(`horizontalCentered="${options.centerHorizontally ? 1 : 0}"`);
+  if (typeof options.centerVertically === "boolean") attrs.push(`verticalCentered="${options.centerVertically ? 1 : 0}"`);
+  return attrs.length ? `<printOptions ${attrs.join(" ")}/>` : "";
+}
+
+function xlsxPageSetup(options = {}) {
+  const attrs = [];
+  const orientation = String(options.orientation || "").toLowerCase();
+  if (orientation === "landscape" || orientation === "portrait") attrs.push(`orientation="${orientation}"`);
+  const paperMap = { letter: 1, legal: 5, a4: 9 };
+  const paperSize = paperMap[String(options.paperSize || "").toLowerCase()];
+  if (paperSize) attrs.push(`paperSize="${paperSize}"`);
+  if (Number.isFinite(Number(options.fitToPagesWide))) attrs.push(`fitToWidth="${Math.max(0, Number(options.fitToPagesWide))}"`);
+  if (Number.isFinite(Number(options.fitToPagesTall))) attrs.push(`fitToHeight="${Math.max(0, Number(options.fitToPagesTall))}"`);
+  if (Number.isFinite(Number(options.scale))) attrs.push(`scale="${Math.max(10, Math.min(400, Number(options.scale)))}"`);
+  if (typeof options.blackAndWhite === "boolean") attrs.push(`blackAndWhite="${options.blackAndWhite ? 1 : 0}"`);
+  if (typeof options.draftMode === "boolean") attrs.push(`draft="${options.draftMode ? 1 : 0}"`);
+  return attrs.length ? `<pageSetup ${attrs.join(" ")}/>` : "";
+}
+
+function xlsxLegacyPasswordHash(password = "") {
+  let hash = 0;
+  const value = String(password || "");
+  for (let i = value.length - 1; i >= 0; i -= 1) {
+    const rotated = ((hash >> 14) & 0x01) | ((hash << 1) & 0x7fff);
+    hash = rotated ^ value.charCodeAt(i);
+  }
+  hash = hash ^ value.length ^ 0xce4b;
+  return (hash & 0xffff).toString(16).toUpperCase().padStart(4, "0");
+}
+
+function xlsxSheetProtection(options = {}) {
+  const protection = options.protection && typeof options.protection === "object" ? options.protection : options;
+  const enabled = protection.protect === true || protection.protected === true || options.protect === true;
+  if (!enabled) return "";
+  const password = protection.password || options.password || "";
+  const attrs = [
+    'sheet="1"',
+    'objects="1"',
+    'scenarios="1"',
+    `formatCells="${protection.allowFormatCells || options.allowFormatCells ? 0 : 1}"`,
+    `sort="${protection.allowSort || options.allowSort ? 0 : 1}"`,
+    `autoFilter="${protection.allowAutoFilter || options.allowAutoFilter ? 0 : 1}"`,
+  ];
+  if (password) attrs.unshift(`password="${xlsxLegacyPasswordHash(password)}"`);
+  return `<sheetProtection ${attrs.join(" ")}/>`;
+}
+
+function sheetXml(rows = [], options = {}) {
+  const normalized = rows.map((row) => Array.isArray(row) ? row : [row]);
+  const dimension = normalized.length && normalized[0]?.length ? `A1:${columnName(Math.max(0, ...normalized.map((row) => row.length - 1)))}${normalized.length}` : "A1";
+  const headerStyle = options.headerStyle !== false;
+  const tableParts = Array.isArray(options.tables) && options.tables.length ? `<tableParts count="${options.tables.length}">${options.tables.map((_table, index) => `<tablePart r:id="rTable${index + 1}"/>`).join("")}</tableParts>` : "";
+  const drawing = options.drawingRelId ? `<drawing r:id="${xml(options.drawingRelId)}"/>` : "";
+  const legacyDrawing = options.commentsRelId ? `<legacyDrawing r:id="${xml(options.commentsRelId)}"/>` : "";
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><dimension ref="${dimension}"/>${xlsxSheetViews(options)}${xlsxCols(options)}<sheetData>${normalized.map((row, rowIndex) => `<row r="${rowIndex + 1}"${xlsxRowHeightAttrs(options, rowIndex)}>${row.map((cell, colIndex) => cellXml(cell, rowIndex, colIndex).replace('<c ', rowIndex === 0 && headerStyle ? '<c s="1" ' : '<c ')).join("")}</row>`).join("")}</sheetData>${xlsxSheetProtection(options)}${xlsxMergeCells(options)}${xlsxAutoFilter(options)}${xlsxDataValidations(options.validations || [])}${xlsxConditionalFormats(options.conditionalFormats || [])}${xlsxHyperlinksXml(options.hyperlinkRefs || [])}${xlsxPrintOptions(options)}${xlsxPageMargins(options)}${xlsxPageSetup(options)}${drawing}${legacyDrawing}${tableParts}</worksheet>`;
+}
+
+function sanitizeSheetName(name, index) {
+  return String(name || `Sheet${index + 1}`).replace(/[\\/?*\[\]:]/g, "-").slice(0, 31) || `Sheet${index + 1}`;
+}
+
+function xlsxSheetFormulaName(name = "Sheet1") {
+  return `'${String(name).replace(/'/g, "''")}'`;
+}
+
+function xlsxDefinedName(value = "NamedRange") {
+  const cleaned = String(value || "NamedRange").replace(/[^A-Za-z0-9_.\\]/g, "_").replace(/^[^A-Za-z_\\]+/, "_").slice(0, 255);
+  return cleaned || "NamedRange";
+}
+
+function xlsxDefinedNameReference(item = {}, sheets = [], fallbackSheetIndex = null) {
+  const rawRef = item.ref || item.reference || item.address || item.range || "A1";
+  const ref = String(rawRef).includes("!") ? String(rawRef) : (() => {
+    const sheetIndex = Number.isInteger(fallbackSheetIndex) ? fallbackSheetIndex : Math.max(0, Number(item.sheetIndex || 0) || 0);
+    const sheetName = item.sheetName || sheets[sheetIndex]?.name || "Sheet1";
+    return `${xlsxSheetFormulaName(sanitizeSheetName(sheetName, sheetIndex))}!${rawRef}`;
+  })();
+  return xml(ref);
+}
+
+function xlsxDefinedNames(sheets = [], workbookNamedRanges = []) {
+  const names = [];
+  const workbookNames = Array.isArray(workbookNamedRanges) ? workbookNamedRanges : [];
+  for (const item of workbookNames) {
+    if (!item || typeof item !== "object") continue;
+    names.push(`<definedName name="${xml(xlsxDefinedName(item.name))}">${xlsxDefinedNameReference(item, sheets)}</definedName>`);
+  }
+  for (const [index, sheet] of sheets.entries()) {
+    const sheetName = xlsxSheetFormulaName(sanitizeSheetName(sheet.name, index));
+    if (sheet.printArea) names.push(`<definedName name="_xlnm.Print_Area" localSheetId="${index}">${xml(`${sheetName}!${String(sheet.printArea)}`)}</definedName>`);
+    const repeatRows = String(sheet.repeatRows || "").replace(/\$/g, "").trim();
+    const repeatColumns = String(sheet.repeatColumns || "").replace(/\$/g, "").trim();
+    const titleRefs = [];
+    if (repeatRows) titleRefs.push(`${sheetName}!$${repeatRows.replace(":", ":$")}`);
+    if (repeatColumns) titleRefs.push(`${sheetName}!$${repeatColumns.replace(":", ":$")}`);
+    if (titleRefs.length) names.push(`<definedName name="_xlnm.Print_Titles" localSheetId="${index}">${xml(titleRefs.join(","))}</definedName>`);
+    const sheetNames = Array.isArray(sheet.namedRanges) ? sheet.namedRanges : [];
+    for (const item of sheetNames) {
+      if (!item || typeof item !== "object") continue;
+      const localSheetId = item.scope === "workbook" ? "" : ` localSheetId="${index}"`;
+      names.push(`<definedName name="${xml(xlsxDefinedName(item.name))}"${localSheetId}>${xlsxDefinedNameReference(item, sheets, index)}</definedName>`);
+    }
+  }
+  return names.length ? `<definedNames>${names.join("")}</definedNames>` : "";
+}
+
+function xlsxStyles() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Aptos"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Aptos"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1F4E79"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+}
+
+function xlsxTableXml(table, tableId) {
+  const ref = table.ref || "A1:B2";
+  const columns = Array.isArray(table.columns) && table.columns.length ? table.columns : ["Column1", "Column2"];
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="${tableId}" name="${xml(table.name || `Table${tableId}`)}" displayName="${xml(table.name || `Table${tableId}`)}" ref="${xml(ref)}" totalsRowShown="0"><autoFilter ref="${xml(ref)}"/><tableColumns count="${columns.length}">${columns.map((column, index) => `<tableColumn id="${index + 1}" name="${xml(column)}"/>`).join("")}</tableColumns><tableStyleInfo name="${xml(table.style || "TableStyleMedium2")}" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/></table>`;
+}
+
+function xlsxDataValidations(validations = []) {
+  if (!validations.length) return "";
+  return `<dataValidations count="${validations.length}">${validations.map((validation) => `<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="${xml(validation.address || validation.sqref || "A1")}"><formula1>"${xml((validation.values || []).join(","))}"</formula1></dataValidation>`).join("")}</dataValidations>`;
+}
+
+function xlsxConditionalFormats(formats = []) {
+  return formats.map((format, index) => `<conditionalFormatting sqref="${xml(format.address || format.sqref || "A1")}"><cfRule type="cellIs" priority="${index + 1}" operator="${xml(format.operator || "greaterThan")}"><formula>${xml(String(format.value ?? 0))}</formula><dxf><fill><patternFill patternType="solid"><fgColor rgb="${xml(String(format.fillColor || "FFFFF2CC").replace(/^#/, "FF"))}"/></patternFill></fill></dxf></cfRule></conditionalFormatting>`).join("");
+}
+
+function xlsxDocumentProperties(payload = {}) {
+  const properties = payload.properties && typeof payload.properties === "object" ? payload.properties : {};
+  const title = properties.title || payload.title || String(payload.fileName || "").replace(/\.xlsx$/i, "");
+  return {
+    title,
+    subject: properties.subject || payload.subject || "",
+    creator: properties.creator || properties.author || payload.author || "CTRL Add-in",
+    keywords: Array.isArray(properties.keywords) ? properties.keywords.join(", ") : properties.keywords || "",
+    description: properties.description || properties.comments || "",
+    category: properties.category || "",
+    company: properties.company || "",
+    manager: properties.manager || "",
+  };
+}
+
+function xlsxCoreProperties(payload = {}) {
+  const props = xlsxDocumentProperties(payload);
+  const now = new Date().toISOString();
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${xml(props.title)}</dc:title><dc:subject>${xml(props.subject)}</dc:subject><dc:creator>${xml(props.creator)}</dc:creator><cp:keywords>${xml(props.keywords)}</cp:keywords><dc:description>${xml(props.description)}</dc:description><cp:category>${xml(props.category)}</cp:category><cp:lastModifiedBy>${xml(props.creator)}</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`;
+}
+
+function xlsxAppProperties(payload = {}) {
+  const props = xlsxDocumentProperties(payload);
+  const sheets = Array.isArray(payload.sheets) && payload.sheets.length ? payload.sheets : [{ name: "Sheet1" }];
+  const sheetNames = sheets.map((sheet, index) => sanitizeSheetName(sheet?.name, index));
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>CTRL Add-in</Application><DocSecurity>0</DocSecurity><ScaleCrop>false</ScaleCrop><HeadingPairs><vt:vector size="2" baseType="variant"><vt:variant><vt:lpstr>Worksheets</vt:lpstr></vt:variant><vt:variant><vt:i4>${sheetNames.length}</vt:i4></vt:variant></vt:vector></HeadingPairs><TitlesOfParts><vt:vector size="${sheetNames.length}" baseType="lpstr">${sheetNames.map((name) => `<vt:lpstr>${xml(name)}</vt:lpstr>`).join("")}</vt:vector></TitlesOfParts><Company>${xml(props.company)}</Company><Manager>${xml(props.manager)}</Manager><LinksUpToDate>false</LinksUpToDate><SharedDoc>false</SharedDoc><HyperlinksChanged>false</HyperlinksChanged><AppVersion>16.0000</AppVersion></Properties>`;
+}
+
+function parseCellAddress(address = "E2") {
+  const match = String(address || "E2").toUpperCase().match(/^([A-Z]+)(\d+)$/);
+  if (!match) return { col: 4, row: 1 };
+  let col = 0;
+  for (const char of match[1]) col = col * 26 + (char.charCodeAt(0) - 64);
+  return { col: Math.max(0, col - 1), row: Math.max(0, Number(match[2]) - 1) };
+}
+
+function xlsxChartFrame(chart = {}, relId = "rChart1", index = 0) {
+  const from = parseCellAddress(chart.cell || chart.startCell || `E${2 + index * 16}`);
+  const widthPx = Math.round(asNumber(chart.width, 520) * 1.333);
+  const heightPx = Math.round(asNumber(chart.height, 300) * 1.333);
+  const columns = Math.max(3, Math.ceil(widthPx / 64));
+  const rows = Math.max(8, Math.ceil(heightPx / 20));
+  const name = xml(chart.title || `Chart ${index + 1}`);
+  return `<xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>${from.col}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${from.row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>${from.col + columns}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${from.row + rows}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame><xdr:nvGraphicFramePr><xdr:cNvPr id="${index + 100}" name="${name}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="${relId}"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>`;
+}
+
+function normalizeXlsxComments(comments = []) {
+  return (Array.isArray(comments) ? comments : []).filter((comment) => comment && typeof comment === "object" && (comment.address || comment.cell) && comment.text).slice(0, 200).map((comment) => ({
+    address: String(comment.address || comment.cell).toUpperCase(),
+    text: String(comment.text || ""),
+    author: String(comment.author || "CTRL Add-in"),
+    visible: comment.visible === true,
+  }));
+}
+
+function xlsxCommentsXml(comments = []) {
+  const authors = [...new Set(comments.map((comment) => comment.author || "CTRL Add-in"))];
+  const authorIndex = (author) => Math.max(0, authors.indexOf(author || "CTRL Add-in"));
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><authors>${authors.map((author) => `<author>${xml(author)}</author>`).join("")}</authors><commentList>${comments.map((comment) => `<comment ref="${xml(comment.address)}" authorId="${authorIndex(comment.author)}"><text><r><rPr><sz val="9"/><color indexed="81"/><rFont val="Tahoma"/></rPr><t>${xml(comment.text)}</t></r></text></comment>`).join("")}</commentList></comments>`;
+}
+
+function xlsxCommentsVml(comments = []) {
+  const shapes = comments.map((comment, index) => {
+    const from = parseCellAddress(comment.address || "A1");
+    const row = from.row;
+    const col = from.col;
+    return `<v:shape id="_x0000_s${1025 + index}" type="#_x0000_t202" style="position:absolute;margin-left:80pt;margin-top:5pt;width:144pt;height:72pt;z-index:${index + 1};visibility:${comment.visible ? "visible" : "hidden"}" fillcolor="#ffffe1" o:insetmode="auto"><v:fill color2="#ffffe1"/><v:shadow on="t" color="black" obscured="t"/><v:path o:connecttype="none"/><v:textbox style="mso-direction-alt:auto"><div style="text-align:left"/></v:textbox><x:ClientData ObjectType="Note"><x:MoveWithCells/><x:SizeWithCells/><x:AutoFill>False</x:AutoFill><x:Row>${row}</x:Row><x:Column>${col}</x:Column></x:ClientData></v:shape>`;
+  }).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xml xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><o:shapelayout v:ext="edit"><o:idmap v:ext="edit" data="1"/></o:shapelayout><v:shapetype id="_x0000_t202" coordsize="21600,21600" o:spt="202" path="m,l,21600r21600,l21600,xe"><v:stroke joinstyle="miter"/><v:path gradientshapeok="t" o:connecttype="rect"/></v:shapetype>${shapes}</xml>`;
+}
+
+function normalizeXlsxHyperlinks(links = []) {
+  return (Array.isArray(links) ? links : []).filter((link) => link && typeof link === "object" && (link.address || link.cell) && (link.url || link.target || link.location)).slice(0, 200).map((link) => ({
+    address: String(link.address || link.cell).toUpperCase(),
+    target: String(link.url || link.target || link.location || ""),
+    tooltip: link.tooltip || link.screenTip || link.text || link.label || link.display || "",
+    display: link.display || link.text || link.label || "",
+  }));
+}
+
+function xlsxHyperlinksXml(links = []) {
+  if (!links.length) return "";
+  return `<hyperlinks>${links.map((link) => `<hyperlink ref="${xml(link.address)}" r:id="${xml(link.relId)}"${link.display ? ` display="${xml(link.display)}"` : ""}${link.tooltip ? ` tooltip="${xml(link.tooltip)}"` : ""}/>`).join("")}</hyperlinks>`;
+}
+
+function xlsxDrawingXml(items = {}) {
+  const images = Array.isArray(items.images) ? items.images : Array.isArray(items) ? items : [];
+  const charts = Array.isArray(items.charts) ? items.charts : [];
+  const anchors = images.map(({ image, relId }, index) => {
+    const from = parseCellAddress(image.cell || image.startCell || `E${2 + index * 12}`);
+    const widthPx = Math.round(asNumber(image.width, 420) * 1.333);
+    const heightPx = Math.round(asNumber(image.height, 240) * 1.333);
+    const columns = Math.max(2, Math.ceil(widthPx / 64));
+    const rows = Math.max(4, Math.ceil(heightPx / 20));
+    const name = xml(image.altText || image.name || `Image ${index + 1}`);
+    return `<xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>${from.col}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${from.row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>${from.col + columns}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${from.row + rows}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${index + 2}" name="${name}" descr="${name}"/><xdr:cNvPicPr/></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="${relId}"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:twoCellAnchor>`;
+  }).join("");
+  const chartAnchors = charts.map(({ chart, relId }, index) => xlsxChartFrame(chart, relId, index)).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${anchors}${chartAnchors}</xdr:wsDr>`;
+}
+
+export function createGeneratedXlsx(payload = {}) {
+  const sheets = Array.isArray(payload.sheets) && payload.sheets.length ? payload.sheets.slice(0, 30) : [{ name: "Sheet1", rows: payload.rows || [], images: payload.images || [] }];
+  const entries = [];
+  const tableEntries = [];
+  const drawingEntries = [];
+  const commentEntries = [];
+  const imageExts = new Set();
+  let tableId = 1;
+  let mediaIndex = 1;
+  let workbookChartId = 1;
+  for (const [sheetIndex, sheet] of sheets.entries()) {
+    const tables = Array.isArray(sheet.tables) ? sheet.tables : [];
+    for (const table of tables) {
+      const tablePath = `xl/tables/table${tableId}.xml`;
+      tableEntries.push({ sheetIndex, table, tableId, tablePath });
+      tableId += 1;
+    }
+    const images = normalizeGeneratedImages(sheet.images);
+    const comments = normalizeXlsxComments(sheet.comments || sheet.notes);
+    if (comments.length) commentEntries.push({ sheetIndex, commentId: commentEntries.length + 1, comments });
+    const sheetCharts = Array.isArray(sheet.charts) ? sheet.charts.slice(0, 10).filter((chart) => chart && typeof chart === "object") : [];
+    let imageRefs = [];
+    let chartRefs = [];
+    if (images.length) {
+      for (const image of images.slice(0, 20)) {
+        const bytes = imageBytes(image);
+        if (!bytes) continue;
+        const ext = imageExt(image.type);
+        imageExts.add(ext);
+        const mediaName = `image${mediaIndex++}.${ext}`;
+        entries.push([`xl/media/${mediaName}`, bytes]);
+        imageRefs.push({ image: { ...image, name: image.name || mediaName }, mediaName, relId: `rImage${imageRefs.length + 1}` });
+      }
+    }
+    for (const chart of sheetCharts) {
+      const chartNumber = workbookChartId++;
+      entries.push([`xl/charts/chart${chartNumber}.xml`, chartXml(chart)]);
+      chartRefs.push({ chart, chartNumber, relId: `rChart${chartRefs.length + 1}` });
+    }
+    if (imageRefs.length || chartRefs.length) drawingEntries.push({ sheetIndex, drawingId: drawingEntries.length + 1, imageRefs, chartRefs });
+  }
+  entries.push(["[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>${[...imageExts].map((ext) => `<Default Extension="${ext}" ContentType="${imageContentType(ext)}"/>`).join("")}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_sheet, index) => `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}${drawingEntries.map((entry) => `<Override PartName="/xl/drawings/drawing${entry.drawingId}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`).join("")}${commentEntries.map((entry) => `<Override PartName="/xl/comments/comment${entry.commentId}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"/>`).join("")}${Array.from({ length: workbookChartId - 1 }, (_unused, index) => `<Override PartName="/xl/charts/chart${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`).join("")}${tableEntries.map((entry) => `<Override PartName="/${entry.tablePath}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>`).join("")}</Types>`]);
+  entries.push(["_rels/.rels", rels([
+    { id: "rId1", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument", target: "xl/workbook.xml" },
+    { id: "rCore", type: "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties", target: "docProps/core.xml" },
+    { id: "rApp", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties", target: "docProps/app.xml" },
+  ])]);
+  entries.push(["docProps/core.xml", xlsxCoreProperties(payload)]);
+  entries.push(["docProps/app.xml", xlsxAppProperties(payload)]);
+  entries.push(["xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((sheet, index) => `<sheet name="${xml(sanitizeSheetName(sheet.name, index))}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")}</sheets>${xlsxDefinedNames(sheets, payload.namedRanges)}</workbook>`]);
+  entries.push(["xl/_rels/workbook.xml.rels", rels([
+    ...sheets.map((_sheet, index) => ({ id: `rId${index + 1}`, type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet", target: `worksheets/sheet${index + 1}.xml` })),
+    { id: "rStyles", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles", target: "styles.xml" },
+  ])]);
+  entries.push(["xl/styles.xml", xlsxStyles()]);
+  sheets.forEach((sheet, index) => {
+    const sheetTables = tableEntries.filter((entry) => entry.sheetIndex === index);
+    const drawingEntry = drawingEntries.find((entry) => entry.sheetIndex === index);
+    const commentEntry = commentEntries.find((entry) => entry.sheetIndex === index);
+    const hyperlinks = normalizeXlsxHyperlinks(sheet.links || sheet.hyperlinks);
+    const sheetRelationships = sheetTables.map((entry, relIndex) => ({ id: `rTable${relIndex + 1}`, type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table", target: `../tables/table${entry.tableId}.xml` }));
+    if (drawingEntry) sheetRelationships.push({ id: "rDrawing1", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing", target: `../drawings/drawing${drawingEntry.drawingId}.xml` });
+    if (commentEntry) {
+      sheetRelationships.push({ id: "rComments1", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments", target: `../comments/comment${commentEntry.commentId}.xml` });
+      sheetRelationships.push({ id: "rVmlDrawing1", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing", target: `../drawings/vmlDrawing${commentEntry.commentId}.vml` });
+    }
+    const hyperlinkRefs = hyperlinks.map((link, linkIndex) => ({ ...link, relId: `rHyperlink${linkIndex + 1}` }));
+    for (const link of hyperlinkRefs) sheetRelationships.push({ id: link.relId, type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", target: link.target, targetMode: "External" });
+    entries.push([`xl/worksheets/sheet${index + 1}.xml`, sheetXml(sheet.rows || [], { ...sheet, tables: sheetTables.map((entry) => entry.table), drawingRelId: drawingEntry ? "rDrawing1" : "", commentsRelId: commentEntry ? "rVmlDrawing1" : "", hyperlinkRefs })]);
+    if (sheetRelationships.length) entries.push([`xl/worksheets/_rels/sheet${index + 1}.xml.rels`, rels(sheetRelationships)]);
+  });
+  for (const entry of commentEntries) {
+    entries.push([`xl/comments/comment${entry.commentId}.xml`, xlsxCommentsXml(entry.comments)]);
+    entries.push([`xl/drawings/vmlDrawing${entry.commentId}.vml`, xlsxCommentsVml(entry.comments)]);
+  }
+  for (const entry of drawingEntries) {
+    entries.push([`xl/drawings/drawing${entry.drawingId}.xml`, xlsxDrawingXml({ images: entry.imageRefs, charts: entry.chartRefs })]);
+    entries.push([`xl/drawings/_rels/drawing${entry.drawingId}.xml.rels`, rels([
+      ...entry.imageRefs.map((imageRef) => ({ id: imageRef.relId, type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image", target: `../media/${imageRef.mediaName}` })),
+      ...entry.chartRefs.map((chartRef) => ({ id: chartRef.relId, type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart", target: `../charts/chart${chartRef.chartNumber}.xml` })),
+    ])]);
+  }
+  for (const entry of tableEntries) entries.push([entry.tablePath, xlsxTableXml(entry.table, entry.tableId)]);
+  return zip(entries);
+}
+
+function scopedRoot(identity = { tenant: "development", subject: "development" }) {
+  const scope = crypto.createHash("sha256").update(`${identity.tenant}\0${identity.subject}`).digest("hex");
+  return path.join(GENERATED_ROOT, scope);
+}
+
+async function removeExpiredArtifacts(root) {
+  let names = [];
+  try { names = await readdir(root); } catch (error) { if (error?.code === "ENOENT") return; throw error; }
+  await Promise.all(names.slice(0, 500).map(async (name) => {
+    if (!/^[0-9]+-[0-9a-f-]+-.+\.(docx|pptx|xlsx)$/i.test(name)) return;
+    const filePath = path.join(root, name);
+    try {
+      const info = await stat(filePath);
+      if (info.isFile() && Date.now() - info.mtimeMs > GENERATED_RETENTION_MS) await rm(filePath, { force: true });
+    } catch (error) { if (error?.code !== "ENOENT") throw error; }
+  }));
+}
+
+export async function handleGeneratedOffice(req, res, url, identity) {
+  const root = scopedRoot(identity);
+  try {
+    await removeExpiredArtifacts(root);
+    if (url.pathname.startsWith("/api/generated/files/")) {
+      const id = path.basename(url.pathname);
+      const filePath = path.join(root, id);
+      const info = await stat(filePath);
+      if (!info.isFile()) return sendJson(res, 404, { error: { message: "Generated file not found" } });
+      if (Date.now() - info.mtimeMs > GENERATED_RETENTION_MS) return sendJson(res, 410, { error: { message: "Generated file has expired." } });
+      const buffer = await readFile(filePath);
+      if (buffer.length > MAX_PAYLOAD_BYTES) return sendJson(res, 413, { error: { message: "Generated file exceeds the configured artifact limit." } });
+      const downloadName = safeFileName(id.slice(id.indexOf("-") + 1));
+      res.writeHead(200, { "content-type": officeContentType(id), "content-disposition": `attachment; filename="${downloadName}"`, "cache-control": "private, no-store", "x-content-type-options": "nosniff", "content-length": buffer.length });
+      res.end(buffer);
+      return;
+    }
+
+    const kind = url.pathname === "/api/generated/pptx" ? "pptx" : url.pathname === "/api/generated/docx" ? "docx" : url.pathname === "/api/generated/xlsx" ? "xlsx" : "";
+    if (!kind) return false;
+    if (req.method !== "POST") return sendJson(res, 405, { error: { message: "Method not allowed" } });
+    const body = await readJson(req);
+    if (!body) return sendJson(res, 400, { error: { message: "Missing generated Office payload" } });
+    const resolvedBody = await resolveGeneratedPayloadAssets(body, kind);
+    const fileName = kind === "pptx"
+      ? safeFileName(resolvedBody.fileName || resolvedBody.title || "generated-deck.pptx")
+      : safeFileNameWithExtension(resolvedBody.fileName || resolvedBody.title || `generated-${kind}`, kind);
+    const id = `${Date.now()}-${crypto.randomUUID()}-${fileName}`;
+    const buffer = kind === "pptx" ? createGeneratedPptx(resolvedBody) : kind === "docx" ? createGeneratedDocx(resolvedBody) : createGeneratedXlsx(resolvedBody);
+    const packageInfo = validateGeneratedOfficePackage(buffer, kind);
+    await mkdir(root, { recursive: true });
+    const filePath = path.join(root, id);
+    await writeFile(filePath, buffer);
+    const expiresAt = new Date(Date.now() + GENERATED_RETENTION_MS).toISOString();
+    return sendJson(res, 200, { ok: true, artifactType: kind, fileName, id, size: buffer.length, packageEntryCount: packageInfo.entryCount, expiresAt, retentionMs: GENERATED_RETENTION_MS, downloadUrl: `/api/generated/files/${encodeURIComponent(id)}` });
+  } catch (error) {
+    return sendJson(res, 500, { error: { message: error instanceof Error ? error.message : String(error) } });
+  }
+}
+
+
