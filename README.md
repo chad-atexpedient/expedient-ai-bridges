@@ -2,7 +2,7 @@
 
 Local compatibility bridges connecting OpenAI/Codex- and Anthropic/Claude-oriented clients to an Expedient or other OpenAI-compatible upstream.
 
-> **Scope:** this repository contains the script-based bridge edition. The separately installed Windows companion may bundle newer bridge builds and optional plugins that are not reproducible from this source tree.
+> **Scope:** this repository contains the exact current compiled bridge bundles, the complete optional Office plugin source, the legacy script installer, and a new source-buildable cross-platform companion. The published v1.1.0 setup EXE remains the canonical packaged Windows release.
 
 ## Architecture report
 
@@ -55,7 +55,7 @@ The installer copies the payload to `%LOCALAPPDATA%\ExpedientAIBridges\app`, pre
 
 ## Source and release status
 
-The files in `bridge/app` are the exact compiled/minified v1.1.0 runtime bundles recovered from the installed package and guarded by release verification. The complete Office plugin source is available under `office-plugin/`, including its lockfile, tests, build scripts, and deployment documentation. The native Windows companion is distributed in the setup EXE; a source-buildable cross-platform shell remains the next packaging milestone.
+The files in `bridge/app` are the exact compiled/minified v1.1.0 runtime bundles recovered from the installed package and guarded by release verification. The complete Office plugin source is available under `office-plugin/`, including its lockfile, tests, build scripts, and deployment documentation. The native Windows companion is distributed in the setup EXE. A new source-buildable .NET companion now lives under `companion/` and builds for Windows x64, macOS arm64, and macOS x64; production supervision, tray/menu-bar UX, signing, notarization, and installer/DMG assembly remain release-hardening milestones.
 
 ## Releases and platform plans
 

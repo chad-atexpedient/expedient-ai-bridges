@@ -25,3 +25,9 @@ bin/
 obj/
 .DS_Store
 Thumbs.db
+
+# .NET companion build output
+**/bin/
+**/obj/
+artifacts/
+

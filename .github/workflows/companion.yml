@@ -1,0 +1,49 @@
+name: Build companion matrix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "companion/**"
+      - ".github/workflows/companion.yml"
+  pull_request:
+    paths:
+      - "companion/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: macos-14
+            rid: osx-arm64
+          - os: macos-13
+            rid: osx-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Build
+        run: dotnet build companion/src/ExpedientBridges/ExpedientBridges.csproj -c Release
+      - name: Publish single-file companion
+        run: dotnet publish companion/src/ExpedientBridges/ExpedientBridges.csproj -c Release -r ${{ matrix.rid }} --self-contained true -o artifacts/${{ matrix.rid }}
+      - name: Diagnostics smoke test
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            ./artifacts/${{ matrix.rid }}/ExpedientBridges.exe diagnostics
+          else
+            ./artifacts/${{ matrix.rid }}/ExpedientBridges diagnostics
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: companion-${{ matrix.rid }}
+          path: artifacts/${{ matrix.rid }}
