@@ -48,5 +48,10 @@ jobs:
           else { bash packaging/macos/create-dmg.sh 'out/stage-${{ matrix.rid }}/Expedient AI Bridges.app' 'out/Expedient-AI-Bridges-1.2.0-${{ matrix.rid }}-unsigned.dmg' }
           Get-ChildItem out/Expedient-AI-Bridges-1.2.0-* -File | Sort-Object Name | ForEach-Object { "$( (Get-FileHash $_ -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)" } | Set-Content out/SHA256SUMS-${{ matrix.rid }}.txt
       - uses: actions/upload-artifact@v4
-        with: { name: "release-candidate-${{ matrix.rid }}", path: "out/Expedient-AI-Bridges-1.2.0-*
-out/SHA256SUMS-*.txt", compression-level: 0 }
+        with:
+          name: "release-candidate-${{ matrix.rid }}"
+          path: |
+            out/Expedient-AI-Bridges-1.2.0-*
+            out/SHA256SUMS-*.txt
+          compression-level: 0
+          if-no-files-found: error
