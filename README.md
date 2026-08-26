@@ -6,7 +6,7 @@ Local compatibility bridges connecting OpenAI/Codex- and Anthropic/Claude-orient
 
 ## Architecture report
 
-Read the illustrated explanation, protocol flow, installation review, and security findings on the [project report](https://chad-atexpedient.github.io/expedient-ai-bridges/).
+Explore the interactive bridge-first [project site](https://chad-atexpedient.github.io/expedient-ai-bridges/), then open the [full technical report](https://chad-atexpedient.github.io/expedient-ai-bridges/architecture-report.html).
 
 ## Core bridge endpoints
 
@@ -56,6 +56,14 @@ The installer copies the payload to `%LOCALAPPDATA%\ExpedientAIBridges\app`, pre
 ## Source and release status
 
 The files in `bridge/app` are compiled/minified runtime bundles. This repository currently lacks their unminified source, source maps, dependency manifest, tests, and source for the newer native Windows companion. See the report for the inspected scope and release recommendations.
+
+## Releases and platform plans
+
+- [Windows v1.1.0 setup release](https://github.com/chad-atexpedient/expedient-ai-bridges/releases/tag/v1.1.0)
+- [Installed payload publication manifest](docs/payload-manifest.md)
+- [macOS DMG architecture and release plan](docs/macos-dmg.md)
+
+Mutable AppData is deliberately excluded from source and release attachments because it contains machine-specific state and can contain credentials, logs, PID records, certificates, and private keys. The setup executable contains the distributable installed program payload.
 
 ## License
 

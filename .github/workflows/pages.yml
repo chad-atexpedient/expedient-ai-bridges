@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "docs/**"
       - "reports/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
@@ -28,7 +29,9 @@ jobs:
       - name: Prepare static site
         run: |
           mkdir -p _site
-          cp reports/expedient-ai-bridges-architecture-report.html _site/index.html
+          cp docs/index.html _site/index.html
+          cp docs/macos-dmg.html _site/macos-dmg.html
+          cp reports/expedient-ai-bridges-architecture-report.html _site/architecture-report.html
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
