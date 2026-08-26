@@ -10,11 +10,10 @@ permissions:
   id-token: write
   attestations: write
 
-environment: production-release
-
 jobs:
   gate:
     runs-on: ubuntu-latest
+    environment: production-release
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0, persist-credentials: false }
