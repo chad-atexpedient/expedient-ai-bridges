@@ -11,7 +11,8 @@ Copy-Item "$source\*" $installDir -Recurse -Force
 if (-not (Test-Path $configPath)) { Copy-Item (Join-Path $source "config.env.example") $configPath }
 $acl = Get-Acl $configPath
 $acl.SetAccessRuleProtection($true, $false)
-$acl.SetAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($env:USERNAME, "FullControl", "Allow")))
+$currentUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+$acl.SetAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($currentUserSid, "FullControl", "Allow")))
 $acl.SetAccessRule((New-Object Security.AccessControl.FileSystemAccessRule("SYSTEM", "FullControl", "Allow")))
 Set-Acl $configPath $acl
 
@@ -39,12 +40,14 @@ function New-Link($path, $target, $arguments, $description) {
 $desktop = [Environment]::GetFolderPath("Desktop")
 New-Link (Join-Path $desktop "Codex - Expedient AI.lnk") (Join-Path $installDir "launch-codex.ps1") "" "Start the bridges and open Codex"
 New-Link (Join-Path $desktop "Claude Code - Expedient AI.lnk") (Join-Path $installDir "launch-claude.ps1") "" "Start the bridges and open Claude Code"
+New-Link (Join-Path $desktop "ChatGPT - Expedient AI.lnk") (Join-Path $installDir "launch-chatgpt.ps1") "" "Start the bridges and open ChatGPT"
 New-Link (Join-Path ([Environment]::GetFolderPath("Startup")) "Expedient AI Bridges.lnk") (Join-Path $installDir "run-bridges.ps1") "" "Start Expedient AI bridges silently"
 
 $taskbar = Join-Path $env:APPDATA "Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"
 New-Item -ItemType Directory -Force -Path $taskbar | Out-Null
 Copy-Item (Join-Path $desktop "Codex - Expedient AI.lnk") $taskbar -Force
 Copy-Item (Join-Path $desktop "Claude Code - Expedient AI.lnk") $taskbar -Force
+Copy-Item (Join-Path $desktop "ChatGPT - Expedient AI.lnk") $taskbar -Force
 
 & (Join-Path $installDir "run-bridges.ps1")
 if (-not $Silent) { Write-Host "Installed. Configure your key in $configPath" }

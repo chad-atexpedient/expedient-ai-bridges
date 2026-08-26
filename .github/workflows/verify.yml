@@ -1,0 +1,35 @@
+name: Verify bridge release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check JavaScript syntax
+        shell: pwsh
+        run: |
+          node --check bridge/app/index.js
+          node --check bridge/app/anthropic-bridge.js
+      - name: Parse PowerShell scripts
+        shell: pwsh
+        run: |
+          $errors = @()
+          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors)
+          }
+          if ($errors.Count) { $errors | Format-List; exit 1 }
+      - name: Verify current payload and secret boundaries
+        shell: pwsh
+        run: ./tests/verify-release.ps1
